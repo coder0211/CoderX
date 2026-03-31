@@ -6,6 +6,7 @@ User có thể gửi nhiều /code commands, chúng se được xếp hàng và 
 import asyncio
 from dataclasses import dataclass, field
 from typing import Callable, Optional
+from rich.console import Console
 
 
 @dataclass
@@ -31,6 +32,7 @@ class TaskQueue:
         self._task_counter: int = 0
         self._worker_task: Optional[asyncio.Task] = None
         self._current_agent = None  # AutonomousAgent instance đang chạy
+        self.console = Console()
 
     @property
     def is_running(self) -> bool:
@@ -103,6 +105,8 @@ class TaskQueue:
             self._current_task = task
 
             try:
+                log_msg = f"[Task #{task.task_id}] Bắt đầu: {task.goal}"
+                self.console.print(f"[bold cyan][Queue][/bold cyan] {log_msg}")
                 await task.notify(
                     f"🤖 *[Task #{task.task_id}] Bắt đầu*\n"
                     f"🎯 _{task.goal}_"
@@ -114,6 +118,7 @@ class TaskQueue:
                 self._current_agent = None
 
                 remaining = self._queue.qsize()
+                self.console.print(f"[bold green][Queue][/bold green] Task #{task.task_id} xong!")
                 if remaining > 0:
                     await task.notify(
                         f"✅ Task #{task.task_id} xong!\n"
