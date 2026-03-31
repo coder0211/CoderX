@@ -86,10 +86,10 @@ class AgentState:
 
 
 # ─── System Prompts ───────────────────────────────────────────────────────────
-
 def build_reason_prompt(state: AgentState, workspace_snapshot: str) -> str:
     soul   = _load_soul()
     skills = _load_skills()
+    iteration = len(state.iterations) + 1
     return f"""You are CoderX, an autonomous AI developer.
 {soul}
 
@@ -106,7 +106,7 @@ You are controlling the Antigravity Agent. It is extremely powerful and can:
 ## Current Mission
 Goal: {state.task_goal}
 Workspace: {state.workspace}
-Iteration: {len(state.iterations) + 1} / {config.MAX_ITERATIONS}
+Iteration: {iteration} / {config.MAX_ITERATIONS}
 
 ## Workspace State (current files)
 {workspace_snapshot or "Empty workspace"}
