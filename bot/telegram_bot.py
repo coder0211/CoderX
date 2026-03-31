@@ -247,11 +247,11 @@ async def cmd_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await send(update, "💡 Usage: `/ask <câu hỏi>`")
         return
 
-    from openai import AsyncOpenAI
+    from llm.client import get_openai_client
     question = " ".join(ctx.args)
     await send(update, "🤔 *Đang hỏi ChatGPT...*")
 
-    client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+    client = get_openai_client()
     response = await client.chat.completions.create(
         model=config.OPENAI_MODEL,
         messages=[
@@ -351,8 +351,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # ── 3. Ask ChatGPT to respond naturally ─────────────────────────
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+        from llm.client import get_openai_client
+        client = get_openai_client()
 
         response = await client.chat.completions.create(
             model=config.OPENAI_MODEL,

@@ -184,7 +184,8 @@ class AgentBrain:
     """
 
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+        from llm.client import get_openai_client
+        self.client = get_openai_client()
         self._messages: list[dict] = []
 
     async def reason(
