@@ -30,13 +30,31 @@ async def main():
         if not k: return "MISSING"
         return f"{k[:10]}...{k[-4:]} (len: {len(k)})"
 
+    def _mcp_status_line():
+        if not config.MCP_ENABLED:
+            return "[yellow]⚠[/yellow] MCP Servers: [red]Disabled[/red]"
+        try:
+            import json
+            from pathlib import Path
+            mcp_cfg = Path(__file__).parent / "mcp.json"
+            data = json.loads(mcp_cfg.read_text()) if mcp_cfg.exists() else {}
+            servers = data.get("mcpServers", {})
+            active = [k for k, v in servers.items() if not v.get("disabled", False)]
+            return (
+                f"[green]✓[/green] MCP Servers: [green]Enabled[/green] "
+                f"— [cyan]{len(active)}[/cyan] server(s): [dim]{', '.join(active)}[/dim]"
+            )
+        except Exception:
+            return "[green]✓[/green] MCP Servers: [green]Enabled[/green]"
+
     console.print(Panel.fit(
         "[bold cyan]🤖 CoderX[/bold cyan]\n"
         "[dim]Autonomous AI Developer Bot[/dim]\n\n"
         f"[green]✓[/green] Antigravity CLI: [cyan]{config.ANTIGRAVITY_CLI}[/cyan]\n"
         f"[green]✓[/green] Default workspace: [cyan]{config.DEFAULT_WORKSPACE}[/cyan]\n"
         f"[green]✓[/green] OpenAI model: [cyan]{config.OPENAI_MODEL}[/cyan]\n"
-        f"[green]✓[/green] OpenAI Key: [yellow]{mask_key(config.OPENAI_API_KEY)}[/yellow]",
+        f"[green]✓[/green] OpenAI Key: [yellow]{mask_key(config.OPENAI_API_KEY)}[/yellow]\n"
+        + _mcp_status_line(),
         title="CoderX Starting",
         border_style="cyan",
     ))
