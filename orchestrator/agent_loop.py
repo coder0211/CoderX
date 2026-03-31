@@ -185,6 +185,13 @@ class AutonomousAgent:
                 
                 # Update current state to the state decided by the brain
                 current_state = next_state
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            log(f"💥 Agent Loop Crashed: {e}\n{tb}", category="FATAL", style="bold red")
+            await self._say(f"❌ *Lỗi hệ thống tạch cmnr sếp ơi:* {e}", silent=False)
+            state.final_state = WorkflowState.FAILED
+            state.final_summary = f"Crashed -> {e}"
 
         finally:
             monitor.stop()
@@ -192,8 +199,12 @@ class AutonomousAgent:
             self.live["current_action"] = ""
 
         # ── Final Report ──────────────────────────────────────────────────────
-        report = await self.brain.generate_final_report(state)
-        state.final_summary = report
+        try:
+            report = await self.brain.generate_final_report(state)
+            state.final_summary = report
+        except Exception as report_err:
+            log(f"Could not generate final report: {report_err}", category="WARN", style="yellow")
+            report = state.final_summary or "Chưa có báo cáo tổng kết vì lỗi mạng/hệ thống."
 
         icon_map = {
             WorkflowState.COMPLETED: "🎉",

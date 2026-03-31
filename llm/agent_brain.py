@@ -264,7 +264,8 @@ class AgentBrain:
         self._messages.append({"role": "assistant", "content": raw})
 
         data = json.loads(raw)
-
+        action_data = data.get("action", {})
+        
         raw_action_type = action_data.get("type", "antigravity")
         try:
             parsed_action_type = ActionType(raw_action_type)
