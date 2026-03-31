@@ -4,3 +4,4 @@ watchdog==4.0.1
 python-dotenv==1.0.1
 aiofiles==24.1.0
 rich==13.8.1
+mcp[cli]>=1.0.0

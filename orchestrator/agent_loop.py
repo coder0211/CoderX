@@ -15,6 +15,7 @@ from llm.agent_brain import (
     Action, ActionType, AgentBrain, AgentIteration,
     AgentState, Decision, Observation,
 )
+from mcp_client.tools_bridge import get_mcp_bridge
 from workspace.monitor import WorkspaceMonitor
 from config import config
 
@@ -34,6 +35,8 @@ class AutonomousAgent:
         self.brain = AgentBrain()
         self.antigravity = AntigravityExecutor()
         self.notify = notify
+        # MCP bridge — kết nối tới external MCP servers
+        self.mcp = get_mcp_bridge() if config.MCP_ENABLED else None
         # Live status — có thể đọc từ bên ngoài bất kỳ lúc nào
         self.live: dict = {
             "phase": "idle",        # idle | reasoning | acting | observing
@@ -71,6 +74,21 @@ class AutonomousAgent:
         monitor = WorkspaceMonitor(workspace)
         monitor.start()
 
+        # ── MCP bridge startup ─────────────────────────────────────────────────
+        if self.mcp:
+            try:
+                await self.mcp.startup()
+                mcp_summary = self.mcp.tools_summary()
+                if mcp_summary:
+                    n_tools = len(self.mcp.list_tools())
+                    servers = self.mcp._manager.connected_servers if self.mcp._manager else []
+                    await self._say(
+                        f"🔧 *MCP Tools sẵn sàng:* {n_tools} tools từ {servers}",
+                        silent=True,
+                    )
+            except Exception as mcp_err:
+                log(f"[MCP] Startup failed: {mcp_err}", style="bold red")
+
         await self._say(
             f"🤖 *CoderX Agent khởi động*\n"
             f"🎯 Mục tiêu: _{task_goal}_\n"
@@ -90,7 +108,8 @@ class AutonomousAgent:
 
                 await self._say(f"🧠 *Đang phân tích bước {iteration}...*", silent=True)
                 action, decision, confidence, decision_reason = await self.brain.reason(
-                    state, snapshot
+                    state, snapshot,
+                    mcp_tools_summary=self.mcp.tools_summary() if self.mcp and self.mcp.is_ready() else "",
                 )
                 self.live["last_thought"] = action.reasoning[:300]
 
@@ -163,6 +182,12 @@ class AutonomousAgent:
 
         finally:
             monitor.stop()
+            # ── MCP bridge shutdown ────────────────────────────────────────────
+            if self.mcp:
+                try:
+                    await self.mcp.shutdown()
+                except Exception:
+                    pass
             self.live["phase"] = "idle"
             self.live["current_action"] = ""
 
@@ -200,6 +225,9 @@ class AutonomousAgent:
 
         elif action.type == ActionType.ANTIGRAVITY:
             return await self._act_antigravity(action, workspace, monitor, iteration)
+
+        elif action.type == ActionType.MCP:
+            return await self._act_mcp(action)
 
         else:  # OBSERVE
             return Observation(
@@ -318,6 +346,51 @@ class AutonomousAgent:
             summary=truncated,
             shell_output=output,
         )
+
+    async def _act_mcp(self, action: Action) -> Observation:
+        """
+        Gọi một MCP tool từ external server.
+
+        action.mcp_tool      : vd "filesystem/read_file"
+        action.mcp_arguments : dict hoặc JSON string các tham số
+        """
+        tool_name = getattr(action, "mcp_tool", "") or ""
+        arguments = getattr(action, "mcp_arguments", {}) or {}
+
+        if not tool_name:
+            return Observation(
+                action=action,
+                status="error",
+                summary="MCP action is missing 'mcp_tool' field.",
+            )
+
+        if not self.mcp or not self.mcp.is_ready():
+            return Observation(
+                action=action,
+                status="error",
+                summary="MCP bridge is not ready. Check MCP_ENABLED and MCP_SERVER_* in .env",
+            )
+
+        await self._say(f"🔧 *MCP Tool:* `{tool_name}`", silent=True)
+
+        try:
+            result = await asyncio.wait_for(
+                self.mcp.execute(tool_name, arguments),
+                timeout=config.MCP_TOOL_TIMEOUT,
+            )
+            truncated = result[:800]
+            await self._say(f"✅ MCP OK\n```\n{truncated}\n```", silent=True)
+            return Observation(action=action, status="done", summary=truncated)
+
+        except asyncio.TimeoutError:
+            msg = f"MCP tool '{tool_name}' timed out after {config.MCP_TOOL_TIMEOUT}s"
+            await self._say(f"⏰ {msg}", silent=True)
+            return Observation(action=action, status="error", summary=msg)
+
+        except Exception as e:
+            msg = f"MCP tool '{tool_name}' error: {e}"
+            await self._say(f"❌ {msg}", silent=True)
+            return Observation(action=action, status="error", summary=msg)
 
     def _snapshot_workspace(self, workspace: str) -> str:
         """Liệt kê files trong workspace để cho ChatGPT biết trạng thái hiện tại."""

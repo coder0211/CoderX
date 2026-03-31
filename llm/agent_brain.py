@@ -20,6 +20,7 @@ class ActionType(str, Enum):
     ANTIGRAVITY = "antigravity"   # Gọi Antigravity Agent để code
     SHELL = "shell"               # Chạy shell command
     OBSERVE = "observe"           # Chỉ quan sát, không làm gì mới
+    MCP = "mcp"                   # Gọi tool từ external MCP server
 
 
 class Decision(str, Enum):
@@ -37,6 +38,8 @@ class Action:
     shell_command: Optional[str] = None # Nếu type == SHELL
     reasoning: str = ""                 # Tại sao chọn action này
     relevant_files: list[str] = field(default_factory=list) # Files cần đính kèm cho Antigravity
+    mcp_tool: Optional[str] = None      # Nếu type == MCP: "server/tool_name"
+    mcp_arguments: dict = field(default_factory=dict)  # Nếu type == MCP: tham số của tool
 
 
 @dataclass
@@ -86,10 +89,11 @@ class AgentState:
 
 
 # ─── System Prompts ───────────────────────────────────────────────────────────
-def build_reason_prompt(state: AgentState, workspace_snapshot: str) -> str:
+def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_summary: str = "") -> str:
     soul   = _load_soul()
     skills = _load_skills()
     iteration = len(state.iterations) + 1
+    mcp_section = f"\n{mcp_tools_summary}\n" if mcp_tools_summary else ""
     return f"""You are CoderX, an autonomous AI developer.
 {soul}
 
@@ -102,7 +106,7 @@ You are controlling the Antigravity Agent. It is extremely powerful and can:
 
 ## Skills Reference
 {skills if skills else "(no skills loaded)"}
-
+{mcp_section}
 ## Current Mission
 Goal: {state.task_goal}
 Workspace: {state.workspace}
@@ -122,7 +126,7 @@ Based on the mission, workspace state, and history above:
 
 Respond with JSON only. Field definitions:
 - `decision`: MUST be one of exactly: "continue", "complete", "stuck", "failed". NEVER use "observe" here.
-- `action.type`: MUST be one of exactly: "antigravity", "shell", "observe". This is separate from `decision`.
+- `action.type`: MUST be one of exactly: "antigravity", "shell", "observe", "mcp". This is separate from `decision`.
 
 {{
   "reasoning": "Your analysis of current state and what needs to be done",
@@ -130,12 +134,14 @@ Respond with JSON only. Field definitions:
   "confidence": 0-100,
   "decision_reason": "Why you made this decision",
   "action": {{
-    "type": "antigravity | shell | observe",
+    "type": "antigravity | shell | observe | mcp",
     "title": "Short title for this action (Vietnamese OK)",
     "reasoning": "Why this specific action",
     "prompt": "Full detailed prompt for Antigravity agent (English, very specific)",
     "relevant_files": ["list", "of", "relative", "paths", "to", "attach"],
-    "shell_command": null
+    "shell_command": null,
+    "mcp_tool": null,
+    "mcp_arguments": {{}}
   }}
 }}
 
@@ -146,6 +152,12 @@ Rules for Antigravity Prompts:
 - **CRITICAL**: If you just requested a file/folder to be created, and it is NOT visible in the "Workspace State" (current files) above, the action FAILED or is still pending. **DO NOT** mark as 'complete' until you see the evidence in the snapshot.
 - **Important**: Identify up to 10 most relevant files from the Workspace State above and list them in "relevant_files". These will be pre-opened for the agent.
 - End prompts with: "When done, create `.coderx/step_{iteration}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
+
+MCP Rules (type="mcp"):
+- Use MCP when you need to call an external tool (filesystem, GitHub, DB, search, etc.).
+- Set `mcp_tool` to the qualified name: "server_name/tool_name" (e.g. "filesystem/read_file").
+- Set `mcp_arguments` to the tool's required parameters as a JSON object.
+- Only use MCP tools that are listed in the Available MCP Tools section of this prompt.
 
 Shell Rules:
 - Only npm/pip/git/pytest/python/node/go/ls/cat/mkdir allowed.
@@ -198,6 +210,7 @@ class AgentBrain:
         self,
         state: AgentState,
         workspace_snapshot: str,
+        mcp_tools_summary: str = "",
     ) -> tuple[Action, Decision, int, str]:
         """
         ReAct: REASON phase.
@@ -206,7 +219,7 @@ class AgentBrain:
         Returns:
             (action, decision, confidence, decision_reason)
         """
-        system_prompt = build_reason_prompt(state, workspace_snapshot)
+        system_prompt = build_reason_prompt(state, workspace_snapshot, mcp_tools_summary)
 
         # Build conversation (keep history for continuity)
         if not self._messages:
@@ -257,6 +270,8 @@ class AgentBrain:
             shell_command=action_data.get("shell_command"),
             reasoning=action_data.get("reasoning", ""),
             relevant_files=action_data.get("relevant_files", []),
+            mcp_tool=action_data.get("mcp_tool"),
+            mcp_arguments=action_data.get("mcp_arguments") or {},
         )
 
         raw_decision = data.get("decision", "continue")

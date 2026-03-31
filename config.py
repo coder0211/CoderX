@@ -51,6 +51,12 @@ class Config:
     # CoderX internal dir (inside workspace)
     CODERX_DIR: str = ".coderx"
 
+    # ── MCP Client ────────────────────────────────────────────────────────────
+    # Master switch: nếu False, MCPToolsBridge sẽ không kết nối dù có cấu hình
+    MCP_ENABLED: bool = os.getenv("MCP_ENABLED", "true").lower() in ("1", "true", "yes")
+    # Timeout (giây) khi gọi tool từ MCP server
+    MCP_TOOL_TIMEOUT: int = int(os.getenv("MCP_TOOL_TIMEOUT", "30"))
+
 
     @classmethod
     def validate(cls) -> None:
