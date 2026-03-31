@@ -143,6 +143,7 @@ class TaskQueue:
 
     async def _worker_loop(self) -> None:
         """Background worker: lấy task từ queue và chạy."""
+        from orchestrator.orchestrator_loop import OpenClawOrchestrator
         from orchestrator.agent_loop import AutonomousAgent
 
         while True:
@@ -154,11 +155,10 @@ class TaskQueue:
                 log_msg = f"Task #{task.task_id} bắt đầu: {task.goal}"
                 log_queue(log_msg)
                 
-                # Removed redundant `task.notify` here so the natural LLM intent reply stands alone.
-
-                agent = AutonomousAgent(notify=task.notify)
-                self._current_agent = agent
-                await agent.run(task.goal, task.workspace)
+                # Use Orchestrator (OpenClaw Style)
+                orchestrator = OpenClawOrchestrator(notify=task.notify)
+                self._current_agent = orchestrator  # Track for status status
+                await orchestrator.run(task.goal, task.workspace)
                 self._current_agent = None
 
                 remaining = self._queue.qsize()

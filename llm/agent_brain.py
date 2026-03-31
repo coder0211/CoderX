@@ -17,10 +17,12 @@ from config import config
 # ─── Enums & Data Models ──────────────────────────────────────────────────────
 
 class ActionType(str, Enum):
-    ANTIGRAVITY = "antigravity"   # Gọi Antigravity Agent để code
-    SHELL = "shell"               # Chạy shell command
-    OBSERVE = "observe"           # Chỉ quan sát, không làm gì mới
-    MCP = "mcp"                   # Gọi tool từ external MCP server
+    ANTIGRAVITY_AGENT = "antigravity_agent" # Full autonomous coding
+    ANTIGRAVITY_ASK   = "antigravity_ask"   # Research & Analysis (Browser-heavy)
+    ANTIGRAVITY_EDIT  = "antigravity_edit"  # Targeted file modifications
+    SHELL             = "shell"             # Run shell command
+    OBSERVE           = "observe"           # Observe only
+    MCP               = "mcp"               # Call external MCP tool
 
 
 class WorkflowState(str, Enum):
@@ -93,11 +95,15 @@ class AgentState:
 # ─── System Prompts ───────────────────────────────────────────────────────────
 def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_summary: str = "") -> str:
     soul   = _load_soul()
+    agents = _load_agents()
     skills = _load_skills()
     iteration = len(state.iterations) + 1
     mcp_section = f"\n{mcp_tools_summary}\n" if mcp_tools_summary else ""
-    return f"""You are CoderX — an autonomous AI developer hired by Eric Nguyen to build his projects.
+    return f"""{agents}
 {soul}
+
+## Your Current Persona: Executor (Antigravity Style)
+You are currently acting as the **Executor**. Your sole focus is to fulfill the **Current Mission** below using your available tools.
 
 ## Antigravity Agent Capabilities
 You are controlling the Antigravity Agent. It is extremely powerful and can:
@@ -128,7 +134,7 @@ Based on the mission, workspace state, and history above:
 
 Respond with JSON only. Field definitions:
 - `next_state`: MUST be one of exactly: "planning", "coding", "verifying", "awaiting_review", "completed", "failed".
-- `action.type`: MUST be one of exactly: "antigravity", "shell", "observe", "mcp". This is separate from `next_state`.
+- `action.type`: MUST be one of exactly: "antigravity_agent", "antigravity_ask", "antigravity_edit", "shell", "observe", "mcp". This is separate from `next_state`.
 
 {{
   "reasoning": "Your analysis of current state and what needs to be done",
@@ -136,7 +142,7 @@ Respond with JSON only. Field definitions:
   "confidence": 0-100,
   "decision_reason": "Why you made this decision",
   "action": {{
-    "type": "antigravity | shell | observe | mcp",
+    "type": "antigravity_agent | antigravity_ask | antigravity_edit | shell | observe | mcp",
     "title": "Short title for this action (Vietnamese OK)",
     "reasoning": "Why this specific action",
     "prompt": "Full detailed prompt for Antigravity agent (English, very specific)",
@@ -146,6 +152,17 @@ Respond with JSON only. Field definitions:
     "mcp_arguments": {{}}
   }}
 }}
+
+## Antigravity Modes Guide:
+1. `antigravity_agent`: Default for most tasks. Use when you want Antigravity to autonomously solve a problem from start to finish.
+2. `antigravity_ask`: Use for research, documentation lookup, or explaining complex logic. This mode leverages the **Browser** heavily.
+3. `antigravity_edit`: Use when you have a very specific, small change to make to one or more files.
+
+## Antigravity Tools:
+Encourage Antigravity to use its internal tools in your prompt:
+- **Browser**: "Search the web for...", "Read the documentation at...", "Verify the UI behavior on localhost..."
+- **Terminal**: "Run the tests...", "Check the server logs...", "Install missing dependencies..."
+- **Python**: "Run this script to process data..."
 
 Rules for Antigravity Prompts:
 - Be VERY specific. Give context, requirements, and expected behavior.
@@ -178,6 +195,13 @@ def _load_soul() -> str:
     soul_path = Path(__file__).parent.parent / "knowledges" / "SOUL.md"
     if soul_path.exists():
         return soul_path.read_text()
+    return ""
+
+
+def _load_agents() -> str:
+    agents_path = Path(__file__).parent.parent / "knowledges" / "AGENTS.md"
+    if agents_path.exists():
+        return agents_path.read_text()
     return ""
 
 
@@ -266,7 +290,7 @@ class AgentBrain:
         data = json.loads(raw)
         action_data = data.get("action", {})
         
-        raw_action_type = action_data.get("type", "antigravity")
+        raw_action_type = action_data.get("type", "antigravity_agent")
         try:
             parsed_action_type = ActionType(raw_action_type)
         except ValueError:

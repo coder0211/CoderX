@@ -27,3 +27,6 @@ def log_agent(message: str):
 
 def log_queue(message: str):
     log(message, category="Queue", style="bold magenta")
+
+def log_orchestrator(message: str):
+    log(message, category="Orchestrator", style="bold yellow")

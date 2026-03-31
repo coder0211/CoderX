@@ -82,8 +82,17 @@ Trả về JSON theo format sau (chỉ JSON, không thêm text khác):
 
 class TaskPlanner:
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+        from llm.client import get_openai_client
+        self.client = get_openai_client()
         self.conversation_history: list[dict] = []
+        self._agents = self._load_agents()
+
+    def _load_agents(self) -> str:
+        from pathlib import Path
+        agents_path = Path(__file__).parent.parent / "knowledges" / "AGENTS.md"
+        if agents_path.exists():
+            return agents_path.read_text()
+        return ""
 
     async def plan(
         self,
@@ -94,6 +103,8 @@ class TaskPlanner:
         """
         Phân tích yêu cầu và tạo execution plan với các steps nhỏ.
         """
+        system_prompt = f"{self._agents}\n\n{SYSTEM_PROMPT}\n\n## Your Current Persona: Orchestrator (OpenClaw Style)\nYou are currently acting as the **Orchestrator**. Your goal is to map out the strategy for the team."
+        
         user_content = f"Workspace hiện tại: {workspace}\n\n"
         if context:
             user_content += f"Context bổ sung:\n{context}\n\n"
@@ -104,7 +115,7 @@ class TaskPlanner:
         response = await self.client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 *self.conversation_history,
             ],
             temperature=0.3,
@@ -117,26 +128,26 @@ class TaskPlanner:
         plan_data = json.loads(raw)
         return self._parse_plan(plan_data, workspace)
 
-    async def refine_step(
+    async def review_and_refine(
         self,
-        step: Step,
-        error_output: str,
-        workspace: str,
-    ) -> Step:
+        plan: ExecutionPlan,
+        latest_result: dict,
+        project_map: str,
+    ) -> ExecutionPlan:
         """
-        Khi 1 step thất bại, nhờ ChatGPT tạo prompt sửa lỗi.
+        Review lại plan sau mỗi bước và điều chỉnh nếu cần.
         """
         user_content = (
-            f"Step {step.id} ({step.type}) gặp lỗi:\n\n"
-            f"Original prompt:\n{step.prompt}\n\n"
-            f"Error/Output:\n{error_output}\n\n"
-            f"Hãy tạo một step FIX để giải quyết lỗi này."
+            f"Bản đồ Project hiện tại:\n{project_map}\n\n"
+            f"Kết quả bước vừa xong:\n{json.dumps(latest_result, indent=2)}\n\n"
+            f"Dựa trên tình hình hiện tại, hãy cập nhật các bước TIẾP THEO của plan. "
+            f"Chỉ trả về JSON các bước còn lại từ ID {latest_result['id'] + 1} trở đi."
         )
 
         response = await self.client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": f"{self._agents}\n\n{SYSTEM_PROMPT}\n\n## Your Current Persona: Orchestrator (Strategy Review Mode)"},
                 *self.conversation_history,
                 {"role": "user", "content": user_content},
             ],
@@ -145,21 +156,46 @@ class TaskPlanner:
         )
 
         raw = response.choices[0].message.content
-        fix_data = json.loads(raw)
+        data = json.loads(raw)
+        
+        # Merge các bước mới vào plan hiện tại
+        new_steps_data = data.get("steps", [])
+        new_steps = []
+        
+        # Giữ lại các bước đã xong
+        for s in plan.steps:
+            if s.id <= latest_result['id']:
+                new_steps.append(s)
+        
+        # Thêm các bước mới/điều chỉnh
+        for s_data in new_steps_data:
+            s_id = s_data.get("id")
+            if s_id > latest_result['id']:
+                new_steps.append(self._parse_step(s_data, len(new_steps) + 1))
+        
+        plan.steps = new_steps
+        plan.total_steps = len(new_steps)
+        return plan
 
-        # Tạo fix step
-        fix_steps = fix_data.get("steps", [])
-        if fix_steps:
-            s = fix_steps[0]
-            return Step(
-                id=step.id,
-                type=StepType.FIX,
-                title=s.get("title", f"Fix step {step.id}"),
-                prompt=s.get("prompt", ""),
-                depends_on=step.depends_on,
-                expected_files=s.get("expected_files", []),
+    def _parse_step(self, s: dict, fallback_id: int) -> Step:
+        prompt = s.get("prompt", "")
+        step_id = s.get("id", fallback_id)
+        if ".coderx/step_" not in prompt:
+            prompt += (
+                f'\n\nIMPORTANT: When you have completed all tasks above, '
+                f'create the file `.coderx/step_{step_id}_done.json` '
+                f'with content: {{"status": "done", "summary": "brief summary of what you did", '
+                f'"files_changed": ["list of files you created or modified"]}}'
             )
-        return step
+        return Step(
+            id=step_id,
+            type=StepType(s.get("type", "code")),
+            title=s.get("title", f"Step {step_id}"),
+            prompt=prompt,
+            depends_on=s.get("depends_on", []),
+            shell_command=s.get("shell_command"),
+            expected_files=s.get("expected_files", []),
+        )
 
     async def summarize_results(
         self,

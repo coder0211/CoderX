@@ -230,11 +230,18 @@ class AutonomousAgent:
     ) -> Observation:
         """Thực thi một action, trả về observation."""
 
-        if action.type == ActionType.SHELL:
-            return await self._act_shell(action, workspace)
+        if action.type in (ActionType.ANTIGRAVITY_AGENT, ActionType.ANTIGRAVITY_ASK, ActionType.ANTIGRAVITY_EDIT):
+            # Map action type back to CLI mode
+            mode_map = {
+                ActionType.ANTIGRAVITY_AGENT: "agent",
+                ActionType.ANTIGRAVITY_ASK:   "ask",
+                ActionType.ANTIGRAVITY_EDIT:  "edit",
+            }
+            mode = mode_map.get(action.type, "agent")
+            return await self._act_antigravity(action, workspace, monitor, iteration, mode=mode)
 
-        elif action.type == ActionType.ANTIGRAVITY:
-            return await self._act_antigravity(action, workspace, monitor, iteration)
+        elif action.type == ActionType.SHELL:
+            return await self._act_shell(action, workspace)
 
         elif action.type == ActionType.MCP:
             return await self._act_mcp(action)
@@ -252,6 +259,7 @@ class AutonomousAgent:
         workspace: str,
         monitor: WorkspaceMonitor,
         iteration: int,
+        mode: str = "agent",
     ) -> Observation:
         """Gọi Antigravity Agent và đợi kết quả."""
         prompt_preview = action.prompt[:150] + "..." if len(action.prompt) > 150 else action.prompt
@@ -265,7 +273,7 @@ class AutonomousAgent:
         success, msg = await self.antigravity.run(
             prompt=action.prompt,
             workspace=workspace,
-            mode="agent",
+            mode=mode,
             context_files=action.relevant_files,
         )
 
