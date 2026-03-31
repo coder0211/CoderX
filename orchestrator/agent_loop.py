@@ -47,10 +47,11 @@ class AutonomousAgent:
             "last_log": "",        # Bản tin log mới nhất gửi qua notify
         }
 
-    async def _say(self, msg: str):
+    async def _say(self, msg: str, silent: bool = True):
+        """Log ra terminal, và tùy chọn gửi qua Telegram."""
         self.live["last_log"] = msg
         log_agent(msg)
-        if self.notify:
+        if self.notify and not silent:
             await self.notify(msg)
 
     async def run(self, task_goal: str, workspace: str) -> AgentState:
@@ -80,14 +81,14 @@ class AutonomousAgent:
         try:
             for iteration in range(1, config.MAX_ITERATIONS + 1):
                 self.live["iteration"] = iteration
-                await self._say(f"\n━━━ *Vòng {iteration}/{config.MAX_ITERATIONS}* ━━━")
+                await self._say(f"\n━━━ *Vòng {iteration}/{config.MAX_ITERATIONS}* ━━━", silent=True)
 
                 # ── REASON ────────────────────────────────────────────────────
                 self.live["phase"] = "reasoning"
                 snapshot = self._snapshot_workspace(workspace)
                 state.workspace_files = snapshot.split("\n") if snapshot else []
 
-                await self._say(f"🧠 *Đang phân tích bước {iteration}...*")
+                await self._say(f"🧠 *Đang phân tích bước {iteration}...*", silent=True)
                 action, decision, confidence, decision_reason = await self.brain.reason(
                     state, snapshot
                 )
@@ -96,7 +97,8 @@ class AutonomousAgent:
                 await self._say(
                     f"💭 **Suy nghĩ:** _{action.reasoning}_\n"
                     f"🎯 **Hành động:** {action.title} (tin cậy: {confidence}%)\n"
-                    f"📝 {decision_reason}"
+                    f"📝 {decision_reason}",
+                    silent=True
                 )
 
                 # ── Early exit: task already done ─────────────────────────────
@@ -104,7 +106,8 @@ class AutonomousAgent:
                     state.final_decision = Decision.COMPLETE
                     await self._say(
                         f"✅ *Agent xác nhận HOÀN THÀNH* (confidence: {confidence}%)\n"
-                        f"_{decision_reason}_"
+                        f"_{decision_reason}_",
+                        silent=False
                     )
                     break
 
@@ -112,7 +115,8 @@ class AutonomousAgent:
                     state.final_decision = decision
                     await self._say(
                         f"🚫 *Agent dừng* — {decision.upper()}\n"
-                        f"_{decision_reason}_"
+                        f"_{decision_reason}_",
+                        silent=False
                     )
                     break
 
@@ -145,14 +149,16 @@ class AutonomousAgent:
 
                 await self._say(
                     f"{status_icon} *Kết quả:* {observation.summary[:200]}"
-                    + files_info
+                    + files_info,
+                    silent=True
                 )
 
             else:
                 # Reached max iterations
                 state.final_decision = Decision.STUCK
                 await self._say(
-                    f"⚠️ Đã đạt giới hạn {config.MAX_ITERATIONS} vòng lặp."
+                    f"⚠️ Đã đạt giới hạn {config.MAX_ITERATIONS} vòng lặp.",
+                    silent=False
                 )
 
         finally:
@@ -174,7 +180,8 @@ class AutonomousAgent:
         await self._say(
             f"\n{icon} *Báo cáo cuối:*\n{report}\n\n"
             f"📊 Tổng: {len(state.iterations)} vòng lặp | "
-            f"Kết quả: {state.final_decision.upper()}"
+            f"Kết quả: {state.final_decision.upper()}",
+            silent=False
         )
 
         return state
@@ -213,7 +220,8 @@ class AutonomousAgent:
         await self._say(
             f"🚀 *Khởi chạy Antigravity Agent*\n"
             f"💬 Yêu cầu: _{prompt_preview}_\n"
-            f"📂 Files đính kèm: `{', '.join(action.relevant_files) or 'none'}`"
+            f"📂 Files đính kèm: `{', '.join(action.relevant_files) or 'none'}`",
+            silent=True
         )
 
         success, msg = await self.antigravity.run(
@@ -233,7 +241,8 @@ class AutonomousAgent:
         await self._say(
             f"⏳ Antigravity Agent đang chạy...\n"
             f"_(Tối đa {config.STEP_TIMEOUT//60} phút — "
-            f"idle {config.STEP_IDLE_TIMEOUT}s không có changes → tự sang bước tiếp)_"
+            f"idle {config.STEP_IDLE_TIMEOUT}s không có changes → tự sang bước tiếp)_",
+            silent=True
         )
 
         result = await monitor.wait_for_step_done(
@@ -246,13 +255,14 @@ class AutonomousAgent:
         # ── done / idle_done: all good ────────────────────────────────────────
         if status in ("done", "idle_done"):
             icon = "✅" if status == "done" else "💤"
-            await self._say(f"{icon} Antigravity xong ({result['elapsed']:.0f}s)")
+            await self._say(f"{icon} Antigravity xong ({result['elapsed']:.0f}s)", silent=True)
 
         # ── cancelled_continue: timeout but NOT an error ──────────────────────
         elif status == "cancelled_continue":
             await self._say(
                 f"⚡ Bước đã chạy hơn {config.STEP_TIMEOUT//60} phút — "
-                f"tự cancel, chuyển tiếp. Brain sẽ đánh giá lại."
+                f"tự cancel, chuyển tiếp. Brain sẽ đánh giá lại.",
+                silent=True
             )
 
         # ── git_confirm: ask user, wait for answer ────────────────────────────
@@ -280,7 +290,8 @@ class AutonomousAgent:
             f"⚠️ *[GIT CONFIRM]*\n"
             f"Lệnh: `{git_command}`\n"
             f"Gửi *YES* để xác nhận hoặc *NO* để bỏ qua.\n"
-            f"_(Tự bỏ qua sau {config.GIT_CONFIRM_TIMEOUT//60} phút nếu không trả lời)_"
+            f"_(Tự bỏ qua sau {config.GIT_CONFIRM_TIMEOUT//60} phút nếu không trả lời)_",
+            silent=False
         )
         # Bot handler sẽ pick up reply và ghi git_confirmed.json
         # Agent Brain sẽ check file này trong lần lặp tiếp theo
@@ -288,7 +299,7 @@ class AutonomousAgent:
     async def _act_shell(self, action: Action, workspace: str) -> Observation:
         """Chạy shell command."""
         cmd = action.shell_command or ""
-        await self._say(f"🖥️ `{cmd}`")
+        await self._say(f"🖥️ `{cmd}`", silent=True)
 
         shell = ShellExecutor(workspace)
         success, stdout, stderr = await shell.run(cmd)
@@ -297,9 +308,9 @@ class AutonomousAgent:
         truncated = output[:600]
 
         if success:
-            await self._say(f"✅ Shell done\n```\n{truncated}\n```")
+            await self._say(f"✅ Shell done\n```\n{truncated}\n```", silent=True)
         else:
-            await self._say(f"❌ Shell failed\n```\n{truncated}\n```")
+            await self._say(f"❌ Shell failed\n```\n{truncated}\n```", silent=True)
 
         return Observation(
             action=action,
