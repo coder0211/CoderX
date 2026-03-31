@@ -9,7 +9,7 @@ load_dotenv()
 
 class Config:
     # Telegram
-    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "").strip("'\" ")
     ALLOWED_USER_IDS: list[int] = [
         int(uid.strip())
         for uid in os.getenv("ALLOWED_USER_IDS", "").split(",")
@@ -17,8 +17,8 @@ class Config:
     ]
 
     # OpenAI
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip("'\" ")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o").strip("'\" ")
 
     # Antigravity
     ANTIGRAVITY_CLI: str = os.getenv(

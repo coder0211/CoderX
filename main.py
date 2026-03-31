@@ -8,8 +8,20 @@ from rich.panel import Panel
 
 from config import config
 from bot.telegram_bot import create_bot, setup_commands
+from llm.client import get_openai_client
 
 console = Console()
+
+
+async def test_openai_connection():
+    """Test API key immediately on startup."""
+    client = get_openai_client()
+    try:
+        # Simple test call
+        await client.models.list()
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 async def main():
@@ -27,6 +39,16 @@ async def main():
     try:
         config.validate()
         console.print("[green]✓ Config validated[/green]")
+
+        # Test OpenAI connection
+        console.print("[cyan]Testing OpenAI connection...[/cyan]")
+        ok, err = await test_openai_connection()
+        if not ok:
+            console.print(f"[red]✗ OpenAI Auth Error:[/red]\n{err}")
+            console.print("\n[yellow]HINT:[/yellow] Kiểm tra file .env, đảm bảo OPENAI_API_KEY không có khoảng trắng dư thừa.")
+            sys.exit(1)
+        console.print("[green]✓ OpenAI Connection OK[/green]")
+
     except EnvironmentError as e:
         console.print(f"[red]✗ Config error:[/red]\n{e}")
         sys.exit(1)
