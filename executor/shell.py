@@ -62,4 +62,6 @@ class ShellExecutor:
         except asyncio.TimeoutError:
             return False, "", f"Command timed out after {timeout}s"
         except Exception as e:
-            return False, "", str(e)
+            import traceback
+            error_msg = f"Shell subprocess error: {str(e)}\n{traceback.format_exc() if config.DEBUG else ''}"
+            return False, "", error_msg.strip()

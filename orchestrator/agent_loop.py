@@ -64,6 +64,10 @@ class AutonomousAgent:
         self.live["started_at"]  = time.time()
         self.live["phase"]       = "starting"
 
+        # Log absolute path for transparency
+        abs_ws = Path(workspace).absolute()
+        self.console.print(f"\n[bold yellow]📁 Working Workspace:[/bold yellow] [cyan]{abs_ws}[/cyan]")
+
         state = AgentState(task_goal=task_goal, workspace=workspace)
         monitor = WorkspaceMonitor(workspace)
         monitor.start()
