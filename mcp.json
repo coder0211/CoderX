@@ -2,39 +2,27 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/hoa.nguyen3/Documents/TEST_BOT"],
-      "env": {}
+      "args": ["-y", "--quiet", "@modelcontextprotocol/server-filesystem", "/Users/hoa.nguyen3/Documents/TEST_BOT"],
+      "env": {
+        "NPM_CONFIG_LOGLEVEL": "error",
+        "NODE_NO_WARNINGS": "1"
+      }
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"],
-      "env": {}
-    },
-    "fetch": {
-      "command": "npx",
-      "args": ["-y", "mcp-fetch"],
-      "env": {}
-    },
-    "git": {
-      "command": "npx",
-      "args": ["-y", "mcp-git"],
-      "env": {},
-      "disabled": true
-    },
-    "time": {
-      "command": "npx",
-      "args": ["-y", "mcp-time"],
-      "env": {}
-    },
-    "sqlite": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-sqlite", "--db-path", "/Users/hoa.nguyen3/Documents/our/CoderX/.coderx/agent_memory.db"],
-      "env": {}
+      "args": ["-y", "--quiet", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "NPM_CONFIG_LOGLEVEL": "error",
+        "NODE_NO_WARNINGS": "1"
+      }
     },
     "sequential-thinking": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
-      "env": {}
+      "args": ["-y", "--quiet", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {
+        "NPM_CONFIG_LOGLEVEL": "error",
+        "NODE_NO_WARNINGS": "1"
+      }
     }
   }
 }

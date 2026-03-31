@@ -8,7 +8,9 @@ Chỉ giữ lại /stop, /status, /queue như các lệnh tắt tiện lợi.
 import asyncio
 import json
 import time
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from telegram import Update, BotCommand
 from telegram.constants import ParseMode
@@ -245,20 +247,29 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     # ── Intent: chat (default) ──────────────────────────────────────────────────
     agent_context = _build_agent_context(q, session)
     mcp_bridge = get_mcp_bridge()
-    mcp_context = ""
 
+    # Giờ hiện tại — luôn có sẵn, không cần MCP
+    now_vn = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+    current_time_str = now_vn.strftime("%H:%M, %d/%m/%Y (giờ Việt Nam)")
+
+    mcp_context = ""
     if mcp_bridge.is_ready():
+        tools = mcp_bridge.list_tools()
+        tool_list = "\n".join(
+            f"  - {t['name']}: {t['description'][:80]}"
+            for t in tools
+        )
         mcp_context = (
-            "\n\nBạn có thể gọi MCP tools để trả lời chính xác. "
-            "Nếu cần (ví dụ: hỏi giờ, fetch URL, đọc file), hãy trả lời JSON:\n"
+            f"\n\nBạn có {len(tools)} MCP tools. Dùng khi cần đọc/ghi file, query memory, reasoning phức tạp. "
+            "KHÔNG dùng MCP cho những gì đã biết sẵn (giờ, ngày, câu hỏi đơn giản). "
+            "Khi muốn dùng MCP, trả về JSON: "
             '{"use_mcp": true, "tool": "server/tool_name", "args": {...}}\n'
-            "Chỉ trả về JSON đó, không kèm text. "
-            "Nếu không cần MCP, trả lời tự nhiên bằng tiếng Việt.\n\n"
-            + mcp_bridge.tools_summary()
+            f"Tools có sẵn:\n{tool_list}"
         )
 
     system_msg = (
-        "Bạn là CoderX, AI developer tự hành, đang trò chuyện với chủ nhân qua Telegram.\n\n"
+        "Bạn là CoderX, AI developer tự hành, đang trò chuyện với chủ nhân qua Telegram.\n"
+        f"⏰ Thời gian hiện tại: {current_time_str}\n\n"
         f"Trạng thái hiện tại:\n{agent_context}\n\n"
         "Trả lời TỰ NHIÊN, NGẮN GỌN bằng tiếng Việt. "
         "Nếu đang bận, vẫn có thể trả lời câu hỏi ngắn."

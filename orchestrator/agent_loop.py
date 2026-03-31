@@ -74,20 +74,15 @@ class AutonomousAgent:
         monitor = WorkspaceMonitor(workspace)
         monitor.start()
 
-        # ── MCP bridge startup ─────────────────────────────────────────────────
-        if self.mcp:
-            try:
-                await self.mcp.startup()
-                mcp_summary = self.mcp.tools_summary()
-                if mcp_summary:
-                    n_tools = len(self.mcp.list_tools())
-                    servers = self.mcp._manager.connected_servers if self.mcp._manager else []
-                    await self._say(
-                        f"🔧 *MCP Tools sẵn sàng:* {n_tools} tools từ {servers}",
-                        silent=True,
-                    )
-            except Exception as mcp_err:
-                log(f"[MCP] Startup failed: {mcp_err}", style="bold red")
+        # ── MCP bridge ────────────────────────────────────────────────────
+        # Bridge được khởi động từ main.py — chỉ cần kiểm tra và log
+        if self.mcp and self.mcp.is_ready():
+            n_tools = len(self.mcp.list_tools())
+            servers = self.mcp._manager.connected_servers if self.mcp._manager else []
+            await self._say(
+                f"🔧 *MCP Tools sẵn sàng:* {n_tools} tools từ {servers}",
+                silent=True,
+            )
 
         await self._say(
             f"🤖 *CoderX Agent khởi động*\n"
@@ -182,12 +177,6 @@ class AutonomousAgent:
 
         finally:
             monitor.stop()
-            # ── MCP bridge shutdown ────────────────────────────────────────────
-            if self.mcp:
-                try:
-                    await self.mcp.shutdown()
-                except Exception:
-                    pass
             self.live["phase"] = "idle"
             self.live["current_action"] = ""
 
