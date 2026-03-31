@@ -121,25 +121,26 @@ Based on the mission, workspace state, and history above:
 3. EVALUATE: Is the task already complete?
 
 Respond with JSON only:
-{{
+{
   "reasoning": "Your analysis of current state and what needs to be done",
   "decision": "continue | complete | stuck | failed",
   "confidence": 0-100,
   "decision_reason": "Why you made this decision",
-  "action": {{
+  "action": {
     "type": "antigravity | shell | observe",
     "title": "Short title for this action (Vietnamese OK)",
     "reasoning": "Why this specific action",
     "prompt": "Full detailed prompt for Antigravity agent (English, very specific)",
     "relevant_files": ["list", "of", "relative", "paths", "to", "attach"],
     "shell_command": null
-  }}
-}}
+  }
+}
 
 Rules for Antigravity Prompts:
 - Be VERY specific. Give context, requirements, and expected behavior.
 - ENCOURAGE the agent to use its Browser or Terminal if helpful (e.g. "Check documentation on [URL] if unsure").
 - **VERIFICATION**: You MUST verify the results of previous actions in the workspace. Do not assume success if the monitor says 'idle_done'.
+- **CRITICAL**: If you just requested a file/folder to be created, and it is NOT visible in the "Workspace State" (current files) above, the action FAILED or is still pending. **DO NOT** mark as 'complete' until you see the evidence in the snapshot.
 - **Important**: Identify up to 10 most relevant files from the Workspace State above and list them in "relevant_files". These will be pre-opened for the agent.
 - End prompts with: "When done, create `.coderx/step_{iteration}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
 
@@ -149,9 +150,9 @@ Shell Rules:
 
 Observation States:
 - 'cancelled_continue': Antigravity timed out (15min) — check what was done and continue.
-- 'idle_done': No file changes detected for 60s. **WARNING**: This may mean the agent finished OR it got stuck/failed to signal. You MUST verify the work now.
+- 'idle_done': No file changes detected for 60s. **WARNING**: This may mean the agent finished OR it got stuck/failed to signal. You MUST verify the work now via the snapshot.
 - 'git_confirm': User asked to confirm push — check git_confirmed.json.
-- 'done': Agent explicitly signaled completion. Still, do a final quick check.
+- 'done': Agent explicitly signaled completion. Still, verify via snapshot.
 """
 
 

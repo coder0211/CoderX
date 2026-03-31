@@ -20,7 +20,7 @@ class ShellExecutor:
     ]
 
     def __init__(self, workspace: str):
-        self.workspace = workspace
+        self.workspace = os.path.abspath(os.path.expanduser(workspace))
 
     def is_safe(self, command: str) -> bool:
         """Check xem command có an toàn không."""

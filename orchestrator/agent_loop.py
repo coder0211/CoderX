@@ -312,7 +312,7 @@ class AutonomousAgent:
         lines = []
 
         def walk(p: Path, prefix: str = "", depth: int = 0):
-            if depth > 3:
+            if depth > 4:
                 return
             try:
                 items = sorted(p.iterdir(), key=lambda x: (x.is_file(), x.name))
@@ -320,10 +320,10 @@ class AutonomousAgent:
                     if item.name.startswith(".") or item.name in ("node_modules", "__pycache__", "venv"):
                         continue
                     lines.append(f"{prefix}{'📁' if item.is_dir() else '📄'} {item.name}")
-                    if item.is_dir() and depth < 2:
+                    if item.is_dir() and depth < 3:
                         walk(item, prefix + "  ", depth + 1)
             except PermissionError:
                 pass
 
         walk(path)
-        return "\n".join(lines[:60]) if lines else "Empty workspace"
+        return "\n".join(lines[:200]) if lines else "Empty workspace"
