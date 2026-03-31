@@ -9,6 +9,7 @@ from rich.panel import Panel
 from config import config
 from bot.telegram_bot import create_bot, setup_commands
 from llm.client import get_openai_client
+from orchestrator.logger import console, log
 
 console = Console()
 
@@ -72,9 +73,15 @@ async def main():
             drop_pending_updates=True,
         )
 
-        # Keep alive
+        # Keep alive with heartbeat
         try:
-            await asyncio.Event().wait()
+            last_heartbeat = 0
+            while True:
+                await asyncio.sleep(1)
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= 60:
+                    log("Bot is alive and listening for tasks...", style="dim")
+                    last_heartbeat = now
         except (KeyboardInterrupt, asyncio.CancelledError):
             console.print("\n[yellow]Shutting down...[/yellow]")
         finally:

@@ -7,7 +7,7 @@ import asyncio
 import time
 from pathlib import Path
 from typing import Callable, Optional
-from rich.console import Console
+from orchestrator.logger import log, log_agent, console
 
 from executor.antigravity import AntigravityExecutor
 from executor.shell import ShellExecutor
@@ -34,7 +34,6 @@ class AutonomousAgent:
         self.brain = AgentBrain()
         self.antigravity = AntigravityExecutor()
         self.notify = notify
-        self.console = Console()
         # Live status — có thể đọc từ bên ngoài bất kỳ lúc nào
         self.live: dict = {
             "phase": "idle",        # idle | reasoning | acting | observing
@@ -50,8 +49,7 @@ class AutonomousAgent:
 
     async def _say(self, msg: str):
         self.live["last_log"] = msg
-        cleaned_msg = msg.replace("*", "").replace("_", "").replace("`", "")
-        self.console.print(f"[dim][[Agent]][/dim] {cleaned_msg}")
+        log_agent(msg)
         if self.notify:
             await self.notify(msg)
 
@@ -66,7 +64,7 @@ class AutonomousAgent:
 
         # Log absolute path for transparency
         abs_ws = Path(workspace).absolute()
-        self.console.print(f"\n[bold yellow]📁 Working Workspace:[/bold yellow] [cyan]{abs_ws}[/cyan]")
+        log(f"Working Workspace: [cyan]{abs_ws}[/cyan]", category="Workspace", style="bold yellow")
 
         state = AgentState(task_goal=task_goal, workspace=workspace)
         monitor = WorkspaceMonitor(workspace)
