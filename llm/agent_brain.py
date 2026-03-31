@@ -121,20 +121,20 @@ Based on the mission, workspace state, and history above:
 3. EVALUATE: Is the task already complete?
 
 Respond with JSON only:
-{
+{{
   "reasoning": "Your analysis of current state and what needs to be done",
   "decision": "continue | complete | stuck | failed",
   "confidence": 0-100,
   "decision_reason": "Why you made this decision",
-  "action": {
+  "action": {{
     "type": "antigravity | shell | observe",
     "title": "Short title for this action (Vietnamese OK)",
     "reasoning": "Why this specific action",
     "prompt": "Full detailed prompt for Antigravity agent (English, very specific)",
     "relevant_files": ["list", "of", "relative", "paths", "to", "attach"],
     "shell_command": null
-  }
-}
+  }}
+}}
 
 Rules for Antigravity Prompts:
 - Be VERY specific. Give context, requirements, and expected behavior.
