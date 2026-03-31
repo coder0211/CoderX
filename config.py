@@ -19,6 +19,7 @@ class Config:
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip("'\" ")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o").strip("'\" ")
+    OPENAI_BASE_URL: str | None = os.getenv("OPENAI_BASE_URL", None)
 
     # Antigravity
     ANTIGRAVITY_CLI: str = os.getenv(

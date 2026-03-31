@@ -25,12 +25,17 @@ async def test_openai_connection():
 
 
 async def main():
+    def mask_key(k):
+        if not k: return "MISSING"
+        return f"{k[:10]}...{k[-4:]} (len: {len(k)})"
+
     console.print(Panel.fit(
         "[bold cyan]🤖 CoderX[/bold cyan]\n"
         "[dim]Autonomous AI Developer Bot[/dim]\n\n"
         f"[green]✓[/green] Antigravity CLI: [cyan]{config.ANTIGRAVITY_CLI}[/cyan]\n"
         f"[green]✓[/green] Default workspace: [cyan]{config.DEFAULT_WORKSPACE}[/cyan]\n"
-        f"[green]✓[/green] OpenAI model: [cyan]{config.OPENAI_MODEL}[/cyan]",
+        f"[green]✓[/green] OpenAI model: [cyan]{config.OPENAI_MODEL}[/cyan]\n"
+        f"[green]✓[/green] OpenAI Key: [yellow]{mask_key(config.OPENAI_API_KEY)}[/yellow]",
         title="CoderX Starting",
         border_style="cyan",
     ))
