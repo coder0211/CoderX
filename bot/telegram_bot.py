@@ -187,6 +187,36 @@ async def cmd_workspace(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await send(update, f"✅ Workspace → `{new_path}`")
 
 
+async def cmd_onboard(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    if not is_allowed(uid):
+        return
+
+    session = get_session(uid)
+    q = get_queue(uid)
+
+    bot = ctx.bot
+    chat_id = update.effective_chat.id
+
+    async def notify(msg: str):
+        await send_to_chat(bot, chat_id, msg)
+
+    goal = (
+        "Project Onboarding: Khám phá kiến trúc codebase này. "
+        "Phân tích tech stack, cấu trúc thư mục, entry points và conventions. "
+        "Viết kết quả chi tiết bằng Tiếng Việt vào file `.coderx/onboarding.md`."
+    )
+
+    success, task_id, msg = q.append(goal, session.workspace, notify)
+
+    if not success:
+        await send(update, f"⚠️ {msg}")
+        return
+
+    q.start_worker()
+    await send(update, f"🔍 *Bắt đầu Onboarding Task #{task_id}*\n🎯 _{goal}_")
+
+
 async def cmd_ls(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     if not is_allowed(uid):
@@ -362,6 +392,7 @@ def create_bot() -> Application:
     app.add_handler(CommandHandler("start",     cmd_start))
     app.add_handler(CommandHandler("help",      cmd_start))
     app.add_handler(CommandHandler("code",      cmd_code))
+    app.add_handler(CommandHandler("onboard",   cmd_onboard))
     app.add_handler(CommandHandler("queue",     cmd_queue))
     app.add_handler(CommandHandler("status",    cmd_status))
     app.add_handler(CommandHandler("stop",      cmd_stop))
@@ -376,6 +407,7 @@ def create_bot() -> Application:
 async def setup_commands(app: Application) -> None:
     await app.bot.set_my_commands([
         BotCommand("code",      "➕ Thêm coding task vào queue"),
+        BotCommand("onboard",   "🔍 Tự khám phá architecture của project"),
         BotCommand("queue",     "📋 Xem hàng đợi tasks"),
         BotCommand("ask",       "💡 Hỏi ChatGPT kỹ thuật"),
         BotCommand("workspace", "📁 Xem/đổi workspace"),

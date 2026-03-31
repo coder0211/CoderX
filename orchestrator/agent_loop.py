@@ -206,6 +206,7 @@ class AutonomousAgent:
             prompt=action.prompt,
             workspace=workspace,
             mode="agent",
+            context_files=action.relevant_files,
         )
 
         if not success:

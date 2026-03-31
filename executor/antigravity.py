@@ -60,14 +60,16 @@ class AntigravityExecutor:
         prompt: str,
         workspace: str,
         mode: str = "agent",
+        context_files: list[str] = None,
     ) -> tuple[bool, str]:
         """
-        Gọi Antigravity chat với prompt.
+        Gọi Antigravity chat với prompt và context files.
 
         Args:
             prompt: Yêu cầu gửi cho Antigravity Agent
             workspace: Đường dẫn workspace
             mode: 'agent' | 'ask' | 'edit'
+            context_files: Danh sách các file đính kèm (relative paths)
 
         Returns:
             (success, message)
@@ -79,8 +81,15 @@ class AntigravityExecutor:
             "chat",
             "--mode", mode,
             "--reuse-window",
-            prompt,
+            "--maximize",  # Tối đa hóa cửa sổ cho agent
         ]
+
+        # Thêm context files
+        if context_files:
+            for f in context_files:
+                cmd.extend(["--add-file", f])
+
+        cmd.append(prompt)
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -89,13 +98,14 @@ class AntigravityExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
+            # CLI return ngay sau khi mở chat GUI
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
-                timeout=10,  # CLI sẽ return ngay sau khi mở chat
+                timeout=15, 
             )
-            return True, stdout.decode() if stdout else ""
+            output = stdout.decode() if stdout else (stderr.decode() if stderr else "")
+            return True, output
         except asyncio.TimeoutError:
-            # Bình thường — CLI mở chat rồi return, agent vẫn đang chạy trong GUI
-            return True, "Chat opened in Antigravity"
+            return True, "Chat opened with context in Antigravity"
         except Exception as e:
             return False, str(e)

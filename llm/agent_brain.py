@@ -36,6 +36,7 @@ class Action:
     prompt: str                         # Prompt gửi Antigravity / desc hành động
     shell_command: Optional[str] = None # Nếu type == SHELL
     reasoning: str = ""                 # Tại sao chọn action này
+    relevant_files: list[str] = field(default_factory=list) # Files cần đính kèm cho Antigravity
 
 
 @dataclass
@@ -92,6 +93,13 @@ def build_reason_prompt(state: AgentState, workspace_snapshot: str) -> str:
     return f"""You are CoderX, an autonomous AI developer.
 {soul}
 
+## Antigravity Agent Capabilities
+You are controlling the Antigravity Agent. It is extremely powerful and can:
+- Read/Edit multiple files simultaneously.
+- Use a **Browser** to research docs, find libraries, or test web UIs.
+- Use a **Terminal** to run tests, build projects, or debug.
+- Self-correct errors by observing tool output.
+
 ## Skills Reference
 {skills if skills else "(no skills loaded)"}
 
@@ -123,20 +131,25 @@ Respond with JSON only:
     "title": "Short title for this action (Vietnamese OK)",
     "reasoning": "Why this specific action",
     "prompt": "Full detailed prompt for Antigravity agent (English, very specific)",
+    "relevant_files": ["list", "of", "relative", "paths", "to", "attach"],
     "shell_command": null
   }}
 }}
 
-Rules:
-- If decision is "complete", you may set action.type to "observe"
-- If decision is "stuck" or "failed", explain clearly in decision_reason
-- Prompt for antigravity must be very detailed: context, requirements, expected output
-- End antigravity prompts with: "When done, create `.coderx/step_{{iteration}}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
-- Shell commands: only npm/pip/git/pytest/python/node/go/ls/cat/mkdir allowed
-- For git operations: follow the Git Skill rules — safe ops auto, risky ops need confirm via git_confirm_needed.json
-- Observation status 'cancelled_continue' means Antigravity timed out (15min) — treat as partial and continue
-- Observation status 'idle_done' means no file changes for 60s — likely complete, verify
-- Observation status 'git_confirm' means user was asked to confirm git push — check git_confirmed.json result
+Rules for Antigravity Prompts:
+- Be VERY specific. Give context, requirements, and expected behavior.
+- ENCOURAGE the agent to use its Browser or Terminal if helpful (e.g. "Check documentation on [URL] if unsure").
+- **Important**: Identify up to 10 most relevant files from the Workspace State above and list them in "relevant_files". These will be pre-opened for the agent.
+- End prompts with: "When done, create `.coderx/step_{{iteration}}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
+
+Shell Rules:
+- Only npm/pip/git/pytest/python/node/go/ls/cat/mkdir allowed.
+- For git: follow Git Skill (safe auto, risky confirm).
+
+Observation States:
+- 'cancelled_continue': Antigravity timed out (15min) — check what was done and continue.
+- 'idle_done': No file changes for 60s — verify if goal was reached.
+- 'git_confirm': User asked to confirm push — check git_confirmed.json.
 """
 
 
@@ -236,6 +249,7 @@ class AgentBrain:
             prompt=action_data.get("prompt", ""),
             shell_command=action_data.get("shell_command"),
             reasoning=action_data.get("reasoning", ""),
+            relevant_files=action_data.get("relevant_files", []),
         )
 
         decision = Decision(data.get("decision", "continue"))
