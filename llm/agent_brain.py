@@ -157,6 +157,7 @@ Rules for Antigravity Prompts:
 
 MCP Rules (type="mcp"):
 - Use MCP when you need to call an external tool (filesystem, GitHub, DB, search, etc.).
+- CRITICAL: You MUST set `action.type` strictly to "mcp" (NEVER set it to "filesystem", "github", etc).
 - Set `mcp_tool` to the qualified name: "server_name/tool_name" (e.g. "filesystem/read_file").
 - Set `mcp_arguments` to the tool's required parameters as a JSON object.
 - Only use MCP tools that are listed in the Available MCP Tools section of this prompt.
@@ -264,9 +265,22 @@ class AgentBrain:
 
         data = json.loads(raw)
 
-        action_data = data.get("action", {})
+        raw_action_type = action_data.get("type", "antigravity")
+        try:
+            parsed_action_type = ActionType(raw_action_type)
+        except ValueError:
+            from orchestrator.logger import log
+            log(
+                f"[AgentBrain] Invalid action.type: '{raw_action_type}' → fallback to 'mcp'",
+                category="Brain",
+                style="yellow",
+            )
+            parsed_action_type = ActionType.MCP
+            if not action_data.get("mcp_tool"):
+                action_data["mcp_tool"] = raw_action_type
+
         action = Action(
-            type=ActionType(action_data.get("type", "antigravity")),
+            type=parsed_action_type,
             title=action_data.get("title", "Performing action"),
             prompt=action_data.get("prompt", ""),
             shell_command=action_data.get("shell_command"),
