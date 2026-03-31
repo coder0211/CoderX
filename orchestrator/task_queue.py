@@ -153,10 +153,8 @@ class TaskQueue:
             try:
                 log_msg = f"Task #{task.task_id} bắt đầu: {task.goal}"
                 log_queue(log_msg)
-                await task.notify(
-                    f"🤖 *[Task #{task.task_id}] Bắt đầu*\n"
-                    f"🎯 _{task.goal}_"
-                )
+                
+                # Removed redundant `task.notify` here so the natural LLM intent reply stands alone.
 
                 agent = AutonomousAgent(notify=task.notify)
                 self._current_agent = agent
@@ -167,8 +165,13 @@ class TaskQueue:
                 log_queue(f"Task #{task.task_id} hoàn thành!")
                 if remaining > 0:
                     await task.notify(
-                        f"✅ Task #{task.task_id} xong!\n"
-                        f"📋 Còn {remaining} task trong hàng đợi..."
+                        f"✅ Em làm xong Task #{task.task_id} rồi nha!\n"
+                        f"👉 Quay lại chiến tiếp {remaining} task còn lại trong hàng đợi..."
+                    )
+                else:
+                    await task.notify(
+                        f"✅ Em làm xong Task #{task.task_id} rồi nha!\n"
+                        f"☕ Hết việc rồi, anh check thử xem oke chưa nhé!"
                     )
 
             except asyncio.CancelledError:

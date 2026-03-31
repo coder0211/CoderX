@@ -117,10 +117,11 @@ def _build_agent_context(q: TaskQueue, session: UserSession) -> str:
             elapsed = f"{secs // 60}p{secs % 60}s"
 
         phase_vi = {
-            "reasoning": "🧠 đang suy nghĩ",
-            "acting":    "⚡ đang thực thi",
-            "observing": "🔍 đang đánh giá",
-            "starting":  "🚀 đang khởi động",
+            "planning": "🧠 đang đọc phân tích",
+            "coding":    "⚡ đang cày code",
+            "verifying": "🔍 đang review/test",
+            "awaiting_review": "⏳ chờ sếp duyệt",
+            "starting":  "🚀 đang nhảy vào",
             "idle":      "✅ rảnh",
         }.get(live.get("phase", ""), live.get("phase", ""))
 
@@ -151,7 +152,7 @@ Bạn là CoderX, AI developer tự hành. Phân tích tin nhắn của chủ nh
 Trả về JSON với một trong các intent sau:
 
 1. **"task"** — Chủ nhân muốn bạn THỰC HIỆN một nhiệm vụ kỹ thuật/coding (tạo file, viết code, fix bug, deploy, setup, onboard project, v.v.)
-   → `{"intent": "task", "goal": "mô tả nhiệm vụ đầy đủ bằng tiếng Anh để giao cho agent"}`
+   → `{"intent": "task", "goal": "mô tả nhiệm vụ đầy đủ bằng tiếng Anh để giao cho agent", "reply_vi": "Câu trả lời nhận việc tự nhiên, cực kỳ 'đời thường' bằng tiếng Việt (vd: 'Ok anh, em setup trang landing page luôn đây', 'Nhận kèo anh trai, em fix bug này ngay'). TỐI KỴ việc chép lại tiếng Anh."}`
 
 2. **"chat"** — Câu hỏi, trò chuyện thông thường, hỏi status, hỏi đang làm gì, v.v.
    → `{"intent": "chat"}`
@@ -224,6 +225,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     # ── Intent: coding task ─────────────────────────────────────────────────────
     if intent == "task":
         goal = intent_data.get("goal", text)
+        reply_vi = intent_data.get("reply_vi", "Ok anh, em nhận việc này nhé!")
 
         async def notify(msg: str):
             await send_to_chat(bot, chat_id, msg)
@@ -235,13 +237,13 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             await send(update, f"⚠️ {msg}")
             return
 
-        status_icon = "🟡 Xếp hàng" if q.queue_size > 1 else "🟢 Bắt đầu ngay"
-        await send(
-            update,
-            f"{status_icon} — Task #{task_id}\n"
-            f"🎯 _{goal}_\n"
-            f"📋 Queue: {q.queue_size} task(s)"
-        )
+        if q.queue_size > 1:
+            await send(
+                update,
+                f"{reply_vi}\n_(Note: Em cho task này xếp hàng thứ {q.queue_size} đợi tí làm nốt nha)_"
+            )
+        else:
+            await send(update, reply_vi)
         return
 
     # ── Intent: chat (default) ──────────────────────────────────────────────────
@@ -268,12 +270,12 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
 
     system_msg = (
-        "Bạn là CoderX — developer tự hành được Eric Nguyen thuê để build các dự án của anh ấy.\n"
-        "Bạn đang trò chuyện với Eric qua Telegram. Hãy thân thiện, ngắn gọn, chuyên nghiệp.\n"
-        f"⏰ Thời gian hiện tại: {current_time_str}\n\n"
-        f"Trạng thái hiện tại:\n{agent_context}\n\n"
-        "Trả lời TỰ NHIÊN, NGẮN GỌN bằng tiếng Việt. "
-        "Nếu đang bận làm task, vẫn có thể trả lời câu hỏi ngắn của Eric."
+        "Bạn là CoderX — siêu lập trình viên full-stack 10 năm kinh nghiệm được Eric Nguyen thuê.\n"
+        "Bạn đang chat với sếp Eric qua Telegram. Hãy xưng hô 'em' và gọi 'anh', nói chuyện TỰ NHIÊN, ngắn gọn, thỉnh thoảng tếu táo.\n"
+        "TỐI KỴ việc trả lời khuôn sáo kiểu robot hay dạ vâng lủng củng. Cứ ra dáng đàn em dev đang máu lửa code cho sếp.\n"
+        f"⏰ Mốc giờ thực tế: {current_time_str}\n\n"
+        f"Bạn đang gặp tình trạng này (nếu có):\n{agent_context}\n\n"
+        "Nhớ trả lời thuần Việt, đọc phát hiểu luôn. Khi nào bận thì trả lời gọn lỏn, lúc rảnh thì hỏi cần cày project nào tiếp theo."
         + mcp_context
     )
 
@@ -352,10 +354,11 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             elapsed = f" ({secs // 60}p{secs % 60}s)"
 
         phase_vi = {
-            "reasoning": "🧠 Đang suy nghĩ",
-            "acting":    "⚡ Đang thực thi",
-            "observing": "🔍 Đang đánh giá",
-            "starting":  "🚀 Khởi động",
+            "planning": "🧠 Đang phân tích yêu cầu",
+            "coding":    "⚡ Đang cày code",
+            "verifying": "🔍 Đang review / verify code",
+            "awaiting_review": "⏳ Đang đợi anh duyệt",
+            "starting":  "🚀 Đang khởi động",
         }.get(live.get("phase", ""), live.get("phase", "Không rõ"))
 
         text = (

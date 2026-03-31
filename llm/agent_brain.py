@@ -23,11 +23,13 @@ class ActionType(str, Enum):
     MCP = "mcp"                   # Gọi tool từ external MCP server
 
 
-class Decision(str, Enum):
-    CONTINUE = "continue"   # Tiếp tục vòng lặp
-    COMPLETE = "complete"   # Task đã xong
-    STUCK = "stuck"         # Bị kẹt, không biết làm gì
-    FAILED = "failed"       # Thất bại, không thể tiếp tục
+class WorkflowState(str, Enum):
+    PLANNING = "planning"             # Lên kế hoạch
+    CODING = "coding"                 # Đang viết code/thực thi lệnh
+    VERIFYING = "verifying"           # Kiểm thử, đọc lại kết quả
+    AWAITING_REVIEW = "awaiting_review" # Chờ xác nhận từ người dùng
+    COMPLETED = "completed"           # Hoàn thành
+    FAILED = "failed"                 # Thất bại/Bó tay
 
 
 @dataclass
@@ -57,7 +59,7 @@ class AgentIteration:
     iteration: int
     action: Action
     observation: Observation
-    decision: Decision
+    next_state: WorkflowState
     decision_reason: str = ""
     confidence: int = 0                 # 0-100 task hoàn thành
 
@@ -68,7 +70,7 @@ class AgentState:
     workspace: str
     iterations: list[AgentIteration] = field(default_factory=list)
     workspace_files: list[str] = field(default_factory=list)
-    final_decision: Decision = Decision.CONTINUE
+    final_state: WorkflowState = WorkflowState.PLANNING
     final_summary: str = ""
 
     def to_context(self) -> str:
@@ -83,7 +85,7 @@ class AgentState:
                 f"[Iter {it.iteration}] {it.action.type.upper()}: {it.action.title}\n"
                 f"  → Result: {obs.status} | {obs.summary[:200]}\n"
                 f"  → Files changed: {', '.join(obs.files_changed[:5]) or 'none'}\n"
-                f"  → Decision: {it.decision} (confidence: {it.confidence}%)"
+                f"  → Next State: {it.next_state} (confidence: {it.confidence}%)"
             )
         return "\n\n".join(lines)
 
@@ -120,17 +122,17 @@ Iteration: {iteration} / {config.MAX_ITERATIONS}
 
 ## Your Task Now
 Based on the mission, workspace state, and history above:
-1. REASON: What is the current state? What still needs to be done?
-2. DECIDE: What single action should be taken next?
-3. EVALUATE: Is the task already complete?
+1. REASON: What is the current state? What needs to be done next?
+2. NEXT STATE: Should you move to 'coding', 'verifying', 'awaiting_review', or are you 'completed'?
+3. ACTION: What single action to take to achieve this state?
 
 Respond with JSON only. Field definitions:
-- `decision`: MUST be one of exactly: "continue", "complete", "stuck", "failed". NEVER use "observe" here.
-- `action.type`: MUST be one of exactly: "antigravity", "shell", "observe", "mcp". This is separate from `decision`.
+- `next_state`: MUST be one of exactly: "planning", "coding", "verifying", "awaiting_review", "completed", "failed".
+- `action.type`: MUST be one of exactly: "antigravity", "shell", "observe", "mcp". This is separate from `next_state`.
 
 {{
   "reasoning": "Your analysis of current state and what needs to be done",
-  "decision": "continue | complete | stuck | failed",
+  "next_state": "planning | coding | verifying | awaiting_review | completed | failed",
   "confidence": 0-100,
   "decision_reason": "Why you made this decision",
   "action": {{
@@ -211,13 +213,13 @@ class AgentBrain:
         state: AgentState,
         workspace_snapshot: str,
         mcp_tools_summary: str = "",
-    ) -> tuple[Action, Decision, int, str]:
+    ) -> tuple[Action, WorkflowState, int, str]:
         """
         ReAct: REASON phase.
         Phân tích state → quyết định next action.
 
         Returns:
-            (action, decision, confidence, decision_reason)
+            (action, next_state, confidence, decision_reason)
         """
         system_prompt = build_reason_prompt(state, workspace_snapshot, mcp_tools_summary)
 
@@ -274,22 +276,21 @@ class AgentBrain:
             mcp_arguments=action_data.get("mcp_arguments") or {},
         )
 
-        raw_decision = data.get("decision", "continue")
+        raw_state = data.get("next_state", "coding")
         try:
-            decision = Decision(raw_decision)
+            next_state = WorkflowState(raw_state)
         except ValueError:
-            # LLM trả về giá trị không hợp lệ (vd: "observe") — fallback về CONTINUE
             from orchestrator.logger import log
             log(
-                f"[AgentBrain] Invalid decision value: '{raw_decision}' → fallback to 'continue'",
+                f"[AgentBrain] Invalid next_state value: '{raw_state}' → fallback to 'coding'",
                 category="Brain",
                 style="yellow",
             )
-            decision = Decision.CONTINUE
+            next_state = WorkflowState.CODING
         confidence = int(data.get("confidence", 0))
         decision_reason = data.get("decision_reason", "")
 
-        return action, decision, confidence, decision_reason
+        return action, next_state, confidence, decision_reason
 
     async def generate_final_report(self, state: AgentState) -> str:
         """Tạo báo cáo cuối cùng bằng tiếng Việt."""
@@ -312,7 +313,7 @@ class AgentBrain:
                     "role": "user",
                     "content": (
                         f"Nhiệm vụ: {state.task_goal}\n\n"
-                        f"Kết quả: {state.final_decision}\n\n"
+                        f"Kết quả: {state.final_state}\n\n"
                         f"Lịch sử hành động:\n{history}\n\n"
                         f"Files đã tạo/sửa: {', '.join(all_files) or 'none'}\n\n"
                         "Viết báo cáo 3-5 dòng."

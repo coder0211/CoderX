@@ -13,7 +13,7 @@ from executor.antigravity import AntigravityExecutor
 from executor.shell import ShellExecutor
 from llm.agent_brain import (
     Action, ActionType, AgentBrain, AgentIteration,
-    AgentState, Decision, Observation,
+    AgentState, WorkflowState, Observation,
 )
 from mcp_client.tools_bridge import get_mcp_bridge
 from workspace.monitor import WorkspaceMonitor
@@ -85,24 +85,39 @@ class AutonomousAgent:
             )
 
         await self._say(
-            f"🤖 *CoderX Agent khởi động*\n"
+            f"🔥 *Tiến trình chạy ngầm bắt đầu*\n"
             f"🎯 Mục tiêu: _{task_goal}_\n"
             f"📁 Workspace: `{workspace}`\n"
-            f"🔄 Tối đa {config.MAX_ITERATIONS} vòng lặp"
+            f"_(Em sẽ tự bơi trong tối đa {config.MAX_ITERATIONS} bước nhé!)_",
+            silent=True
         )
 
+        import builtins
+        current_state = WorkflowState.PLANNING
+        iteration = 0
+
         try:
-            for iteration in range(1, config.MAX_ITERATIONS + 1):
+            while current_state not in (WorkflowState.COMPLETED, WorkflowState.FAILED):
+                iteration += 1
+                if iteration > config.MAX_ITERATIONS:
+                    state.final_state = WorkflowState.FAILED
+                    await self._say(
+                        f"⚠️ Đã đạt giới hạn {config.MAX_ITERATIONS} vòng lặp.",
+                        silent=False
+                    )
+                    break
+
                 self.live["iteration"] = iteration
-                await self._say(f"\n━━━ *Vòng {iteration}/{config.MAX_ITERATIONS}* ━━━", silent=True)
+                self.live["phase"] = current_state.value
+
+                await self._say(f"\n━━━ *Vòng {iteration} | State: {current_state.value.upper()}* ━━━", silent=True)
 
                 # ── REASON ────────────────────────────────────────────────────
-                self.live["phase"] = "reasoning"
                 snapshot = self._snapshot_workspace(workspace)
                 state.workspace_files = snapshot.split("\n") if snapshot else []
 
                 await self._say(f"🧠 *Đang phân tích bước {iteration}...*", silent=True)
-                action, decision, confidence, decision_reason = await self.brain.reason(
+                action, next_state, confidence, decision_reason = await self.brain.reason(
                     state, snapshot,
                     mcp_tools_summary=self.mcp.tools_summary() if self.mcp and self.mcp.is_ready() else "",
                 )
@@ -110,25 +125,26 @@ class AutonomousAgent:
 
                 await self._say(
                     f"💭 **Suy nghĩ:** _{action.reasoning}_\n"
-                    f"🎯 **Hành động:** {action.title} (tin cậy: {confidence}%)\n"
+                    f"🎯 **Hành động tiếp theo:** {action.title} \n"
+                    f"👉 **Chuyển sang State:** {next_state.value.upper()} (tin cậy: {confidence}%)\n"
                     f"📝 {decision_reason}",
                     silent=True
                 )
 
                 # ── Early exit: task already done ─────────────────────────────
-                if decision == Decision.COMPLETE:
-                    state.final_decision = Decision.COMPLETE
+                if next_state == WorkflowState.COMPLETED:
+                    state.final_state = WorkflowState.COMPLETED
                     await self._say(
-                        f"✅ *Agent xác nhận HOÀN THÀNH* (confidence: {confidence}%)\n"
+                        f"✅ *Xong rồi anh ơi!* (độ tự tin: {confidence}%)\n"
                         f"_{decision_reason}_",
                         silent=False
                     )
                     break
 
-                if decision in (Decision.STUCK, Decision.FAILED):
-                    state.final_decision = decision
+                if next_state == WorkflowState.FAILED:
+                    state.final_state = WorkflowState.FAILED
                     await self._say(
-                        f"🚫 *Agent dừng* — {decision.upper()}\n"
+                        f"🚫 *Sorry anh, em bị kẹt rùi* — FAILED\n"
                         f"_{decision_reason}_",
                         silent=False
                     )
@@ -148,7 +164,7 @@ class AutonomousAgent:
                     iteration=iteration,
                     action=action,
                     observation=observation,
-                    decision=decision,
+                    next_state=next_state,
                     decision_reason=decision_reason,
                     confidence=confidence,
                 )
@@ -166,14 +182,9 @@ class AutonomousAgent:
                     + files_info,
                     silent=True
                 )
-
-            else:
-                # Reached max iterations
-                state.final_decision = Decision.STUCK
-                await self._say(
-                    f"⚠️ Đã đạt giới hạn {config.MAX_ITERATIONS} vòng lặp.",
-                    silent=False
-                )
+                
+                # Update current state to the state decided by the brain
+                current_state = next_state
 
         finally:
             monitor.stop()
@@ -185,16 +196,15 @@ class AutonomousAgent:
         state.final_summary = report
 
         icon_map = {
-            Decision.COMPLETE: "🎉",
-            Decision.STUCK: "😓",
-            Decision.FAILED: "❌",
+            WorkflowState.COMPLETED: "🎉",
+            WorkflowState.FAILED: "❌",
         }
-        icon = icon_map.get(state.final_decision, "📋")
+        icon = icon_map.get(state.final_state, "📋")
 
         await self._say(
-            f"\n{icon} *Báo cáo cuối:*\n{report}\n\n"
-            f"📊 Tổng: {len(state.iterations)} vòng lặp | "
-            f"Kết quả: {state.final_decision.upper()}",
+            f"\n{icon} *Báo cáo tổng kết của em:*\n{report}\n\n"
+            f"📊 Mất {len(state.iterations)} bước | "
+            f"Trạng thái: {state.final_state.value.upper()}",
             silent=False
         )
 
