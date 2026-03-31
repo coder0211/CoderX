@@ -451,7 +451,7 @@ async def setup_commands(app: Application) -> None:
         BotCommand("code",      "➕ Thêm coding task vào queue"),
         BotCommand("onboard",   "🔍 Tự khám phá architecture của project"),
         BotCommand("queue",     "📋 Xem hàng đợi tasks"),
-        BotCommand("ask",       "💡 Hỏi ChatGPT kỹ thuật (có nhớ sử)"),
+        BotCommand("ask",       "💡 Hỏi ChatGPT kỹ thuật (có nhớ lịch sử)"),
         BotCommand("clear",     "🧹 Xóa lịch sử chat"),
         BotCommand("workspace", "📁 Xem/đổi workspace"),
         BotCommand("status",    "🔄 Trạng thái agent"),

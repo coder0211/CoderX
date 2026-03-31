@@ -51,7 +51,7 @@ class AutonomousAgent:
     async def _say(self, msg: str):
         self.live["last_log"] = msg
         cleaned_msg = msg.replace("*", "").replace("_", "").replace("`", "")
-        self.console.print(f"[dim]\[Agent][/dim] {cleaned_msg}")
+        self.console.print(f"[dim][[Agent]][/dim] {cleaned_msg}")
         if self.notify:
             await self.notify(msg)
 
