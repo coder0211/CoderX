@@ -139,8 +139,9 @@ Respond with JSON only:
 Rules for Antigravity Prompts:
 - Be VERY specific. Give context, requirements, and expected behavior.
 - ENCOURAGE the agent to use its Browser or Terminal if helpful (e.g. "Check documentation on [URL] if unsure").
+- **VERIFICATION**: You MUST verify the results of previous actions in the workspace. Do not assume success if the monitor says 'idle_done'.
 - **Important**: Identify up to 10 most relevant files from the Workspace State above and list them in "relevant_files". These will be pre-opened for the agent.
-- End prompts with: "When done, create `.coderx/step_{{iteration}}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
+- End prompts with: "When done, create `.coderx/step_{iteration}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
 
 Shell Rules:
 - Only npm/pip/git/pytest/python/node/go/ls/cat/mkdir allowed.
@@ -148,8 +149,9 @@ Shell Rules:
 
 Observation States:
 - 'cancelled_continue': Antigravity timed out (15min) — check what was done and continue.
-- 'idle_done': No file changes for 60s — verify if goal was reached.
+- 'idle_done': No file changes detected for 60s. **WARNING**: This may mean the agent finished OR it got stuck/failed to signal. You MUST verify the work now.
 - 'git_confirm': User asked to confirm push — check git_confirmed.json.
+- 'done': Agent explicitly signaled completion. Still, do a final quick check.
 """
 
 

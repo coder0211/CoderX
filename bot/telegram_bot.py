@@ -37,6 +37,16 @@ class UserSession:
     def __init__(self, user_id: int):
         self.user_id = user_id
         self.workspace: str = config.DEFAULT_WORKSPACE
+        self.chat_history: list[dict] = []
+
+    def add_message(self, role: str, content: str):
+        self.chat_history.append({"role": role, "content": content})
+        # Keep only last 20 messages (10 turns)
+        if len(self.chat_history) > 20:
+            self.chat_history = self.chat_history[-20:]
+
+    def clear_history(self):
+        self.chat_history = []
 
 
 sessions: dict[int, UserSession] = {}
@@ -94,7 +104,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "*Commands:*\n"
         "  `/code <task>` — Thêm coding task vào queue\n"
         "  `/queue` — Xem hàng đợi\n"
-        "  `/ask <question>` — Hỏi ChatGPT\n"
+        "  `/ask <question>` — Hỏi ChatGPT (có nhớ lịch sử)\n"
+        "  `/clear` — Xóa lịch sử chat\n"
         "  `/workspace <path>` — Đổi workspace\n"
         "  `/status` — Trạng thái agent\n"
         "  `/stop` — Dừng task hiện tại\n"
@@ -131,7 +142,14 @@ async def cmd_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q.start_worker()  # No-op nếu đã running
 
     status = "🟡 *Đã xếp hàng*" if q.is_running else "🟢 *Bắt đầu ngay*"
-    await send(update, f"{status}\n📌 Task #{task_id}: _{task_goal}_\n\n{msg}")
+    pos = q.queue_size
+    text = (
+        f"{status}\n"
+        f"📌 Task #{task_id}: _{task_goal}_\n"
+        f"📋 Vị trí trong queue: {pos}\n"
+        f"{msg}"
+    )
+    await send(update, text)
 
 
 async def cmd_queue(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -249,21 +267,38 @@ async def cmd_ask(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     from llm.client import get_openai_client
     question = " ".join(ctx.args)
-    await send(update, "🤔 *Đang hỏi ChatGPT...*")
+    session = get_session(uid)
+    await send(update, "🤔 *Đang suy nghĩ...*")
 
     client = get_openai_client()
+
+    messages = [
+        {
+            "role": "system",
+            "content": "Bạn là Senior Developer. Trả lời ngắn gọn, chính xác, dùng tiếng Việt.",
+        },
+    ]
+    messages.extend(session.chat_history)
+    messages.append({"role": "user", "content": question})
+
     response = await client.chat.completions.create(
         model=config.OPENAI_MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": "Bạn là Senior Developer. Trả lời ngắn gọn, chính xác, dùng tiếng Việt.",
-            },
-            {"role": "user", "content": question},
-        ],
+        messages=messages,
         temperature=0.5,
     )
-    await send(update, f"💡 {response.choices[0].message.content}")
+    reply = response.choices[0].message.content
+    session.add_message("user", question)
+    session.add_message("assistant", reply)
+    await send(update, f"💡 {reply}")
+
+
+async def cmd_clear(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    if not is_allowed(uid):
+        return
+    session = get_session(uid)
+    session.clear_history()
+    await send(update, "🧹 *Đã xóa lịch sử trò chuyện.*")
 
 
 # ─── Git Confirm Handler ───────────────────────────────────────────────────────
@@ -337,7 +372,8 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             f"- Vòng lặp: {live.get('iteration', 0)}/{live.get('max_iterations', 15)}\n"
             f"- Đang làm: {live.get('current_action') or 'chuẩn bị'}\n"
             f"- Săn sóc nhất: {live.get('last_thought', '')[:200]}\n"
-            f"- Kết quả bước trước: {live.get('last_result', '')[:200]}\n"
+            f"- Kết quả gần nhất: {live.get('last_result', '')[:200]}\n"
+            f"- Bản tin cuối: {live.get('last_log', '')[:200]}\n"
             f"- Thời gian đang chạy: {elapsed}\n"
             f"- Workspace: {ct.workspace}\n"
             f"- Queue còn: {q.queue_size} task"
@@ -354,25 +390,30 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         from llm.client import get_openai_client
         client = get_openai_client()
 
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Bạn là CoderX, một AI developer tự hành. "
+                    "Bạn đang trao đổi với chủ nhân qua Telegram trong khi làm việc.\n\n"
+                    f"Trạng thái hiện tại của bạn:\n{agent_context}\n\n"
+                    "Hãy trả lời câu hỏi của chủ nhân một cách TỰ NHIÊN, NGẮN GỌN, bằng tiếng Việt. "
+                    "Nếu được hỏi đang làm gì, hãy mô tả cụ thể từ trạng thái trên."
+                ),
+            },
+        ]
+        messages.extend(session.chat_history)
+        messages.append({"role": "user", "content": text})
+
         response = await client.chat.completions.create(
             model=config.OPENAI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Bạn là CoderX, một AI developer tự hành. "
-                        "Bạn đang trâu đổi với chủ nhân qua Telegram trong khi làm việc.\n\n"
-                        f"Trạng thái hiện tại của bạn:\n{agent_context}\n\n"
-                        "Hãy trả lời câu hỏi của chủ nhân một cách TỰ NHIÊN, NGẮN GỌN, bằng tiếng Việt. "
-                        "Nếu được hỏi đang làm gì, hãy mô tả cụ thể từ trạng thái trên."
-                    ),
-                },
-                {"role": "user", "content": text},
-            ],
+            messages=messages,
             temperature=0.6,
             max_tokens=400,
         )
         reply = response.choices[0].message.content
+        session.add_message("user", text)
+        session.add_message("assistant", reply)
         await send(update, reply)
 
     except Exception as e:
@@ -399,6 +440,7 @@ def create_bot() -> Application:
     app.add_handler(CommandHandler("workspace", cmd_workspace))
     app.add_handler(CommandHandler("ls",        cmd_ls))
     app.add_handler(CommandHandler("ask",       cmd_ask))
+    app.add_handler(CommandHandler("clear",     cmd_clear))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     return app
@@ -409,7 +451,8 @@ async def setup_commands(app: Application) -> None:
         BotCommand("code",      "➕ Thêm coding task vào queue"),
         BotCommand("onboard",   "🔍 Tự khám phá architecture của project"),
         BotCommand("queue",     "📋 Xem hàng đợi tasks"),
-        BotCommand("ask",       "💡 Hỏi ChatGPT kỹ thuật"),
+        BotCommand("ask",       "💡 Hỏi ChatGPT kỹ thuật (có nhớ sử)"),
+        BotCommand("clear",     "🧹 Xóa lịch sử chat"),
         BotCommand("workspace", "📁 Xem/đổi workspace"),
         BotCommand("status",    "🔄 Trạng thái agent"),
         BotCommand("ls",        "📂 List files"),

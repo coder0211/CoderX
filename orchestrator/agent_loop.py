@@ -43,9 +43,11 @@ class AutonomousAgent:
             "last_result": "",     # Kết quả observation mới nhất
             "started_at": None,    # float timestamp
             "task_goal": "",
+            "last_log": "",        # Bản tin log mới nhất gửi qua notify
         }
 
     async def _say(self, msg: str):
+        self.live["last_log"] = msg
         if self.notify:
             await self.notify(msg)
 
@@ -79,15 +81,16 @@ class AutonomousAgent:
                 snapshot = self._snapshot_workspace(workspace)
                 state.workspace_files = snapshot.split("\n") if snapshot else []
 
-                await self._say("🧠 *Đang phân tích...*")
+                await self._say(f"🧠 *Đang phân tích bước {iteration}...*")
                 action, decision, confidence, decision_reason = await self.brain.reason(
                     state, snapshot
                 )
                 self.live["last_thought"] = action.reasoning[:300]
 
                 await self._say(
-                    f"💭 _{action.reasoning}_\n"
-                    f"➡️ **{action.title}**"
+                    f"💭 **Suy nghĩ:** _{action.reasoning}_\n"
+                    f"🎯 **Hành động:** {action.title} (tin cậy: {confidence}%)\n"
+                    f"📝 {decision_reason}"
                 )
 
                 # ── Early exit: task already done ─────────────────────────────
@@ -200,7 +203,12 @@ class AutonomousAgent:
         iteration: int,
     ) -> Observation:
         """Gọi Antigravity Agent và đợi kết quả."""
-        await self._say(f"⚡ *Gọi Antigravity Agent...*")
+        prompt_preview = action.prompt[:150] + "..." if len(action.prompt) > 150 else action.prompt
+        await self._say(
+            f"🚀 *Khởi chạy Antigravity Agent*\n"
+            f"💬 Yêu cầu: _{prompt_preview}_\n"
+            f"📂 Files đính kèm: `{', '.join(action.relevant_files) or 'none'}`"
+        )
 
         success, msg = await self.antigravity.run(
             prompt=action.prompt,
