@@ -4,7 +4,7 @@ Vòng lặp tự hành: Reason → Act → Observe → Repeat until DONE.
 Bot tự quyết định mọi thứ, không cần user confirm từng bước.
 """
 import asyncio
-import os
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -33,6 +33,17 @@ class AutonomousAgent:
         self.brain = AgentBrain()
         self.antigravity = AntigravityExecutor()
         self.notify = notify
+        # Live status — có thể đọc từ bên ngoài bất kỳ lúc nào
+        self.live: dict = {
+            "phase": "idle",        # idle | reasoning | acting | observing
+            "iteration": 0,
+            "max_iterations": config.MAX_ITERATIONS,
+            "current_action": "",  # Mô tả ngắn action đang chạy
+            "last_thought": "",    # Reasoning mới nhất của Brain
+            "last_result": "",     # Kết quả observation mới nhất
+            "started_at": None,    # float timestamp
+            "task_goal": "",
+        }
 
     async def _say(self, msg: str):
         if self.notify:
@@ -43,6 +54,10 @@ class AutonomousAgent:
         Entry point. Chạy agent cho đến khi hoàn thành hoặc đạt giới hạn.
         Returns AgentState cuối cùng với toàn bộ lịch sử.
         """
+        self.live["task_goal"]   = task_goal
+        self.live["started_at"]  = time.time()
+        self.live["phase"]       = "starting"
+
         state = AgentState(task_goal=task_goal, workspace=workspace)
         monitor = WorkspaceMonitor(workspace)
         monitor.start()
@@ -56,9 +71,11 @@ class AutonomousAgent:
 
         try:
             for iteration in range(1, config.MAX_ITERATIONS + 1):
+                self.live["iteration"] = iteration
                 await self._say(f"\n━━━ *Vòng {iteration}/{config.MAX_ITERATIONS}* ━━━")
 
                 # ── REASON ────────────────────────────────────────────────────
+                self.live["phase"] = "reasoning"
                 snapshot = self._snapshot_workspace(workspace)
                 state.workspace_files = snapshot.split("\n") if snapshot else []
 
@@ -66,6 +83,7 @@ class AutonomousAgent:
                 action, decision, confidence, decision_reason = await self.brain.reason(
                     state, snapshot
                 )
+                self.live["last_thought"] = action.reasoning[:300]
 
                 await self._say(
                     f"💭 _{action.reasoning}_\n"
@@ -90,11 +108,15 @@ class AutonomousAgent:
                     break
 
                 # ── ACT ───────────────────────────────────────────────────────
+                self.live["phase"]          = "acting"
+                self.live["current_action"] = action.title
                 observation = await self._execute_action(
                     action, workspace, monitor, iteration
                 )
 
                 # ── Record iteration ──────────────────────────────────────────
+                self.live["phase"]       = "observing"
+                self.live["last_result"] = observation.summary[:200]
                 agent_iter = AgentIteration(
                     iteration=iteration,
                     action=action,
@@ -106,7 +128,7 @@ class AutonomousAgent:
                 state.iterations.append(agent_iter)
 
                 # ── Log observation ───────────────────────────────────────────
-                status_icon = "✅" if observation.status in ("done", "idle_timeout") else "⚠️"
+                status_icon = "✅" if observation.status in ("done", "idle_done") else "⚠️"
                 files_info = ""
                 if observation.files_changed:
                     top = [Path(f).name for f in observation.files_changed[:4]]
@@ -126,6 +148,8 @@ class AutonomousAgent:
 
         finally:
             monitor.stop()
+            self.live["phase"] = "idle"
+            self.live["current_action"] = ""
 
         # ── Final Report ──────────────────────────────────────────────────────
         report = await self.brain.generate_final_report(state)

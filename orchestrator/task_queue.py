@@ -30,6 +30,7 @@ class TaskQueue:
         self._current_task: Optional[QueuedTask] = None
         self._task_counter: int = 0
         self._worker_task: Optional[asyncio.Task] = None
+        self._current_agent = None  # AutonomousAgent instance đang chạy
 
     @property
     def is_running(self) -> bool:
@@ -42,6 +43,13 @@ class TaskQueue:
     @property
     def queue_size(self) -> int:
         return self._queue.qsize()
+
+    @property
+    def live_status(self) -> dict:
+        """Snapshot thực trạng agent đang chạy."""
+        if self._current_agent and self._running:
+            return dict(self._current_agent.live)
+        return {"phase": "idle"}
 
     def append(self, goal: str, workspace: str, notify: Callable) -> tuple[bool, int, str]:
         """
@@ -101,7 +109,9 @@ class TaskQueue:
                 )
 
                 agent = AutonomousAgent(notify=task.notify)
+                self._current_agent = agent
                 await agent.run(task.goal, task.workspace)
+                self._current_agent = None
 
                 remaining = self._queue.qsize()
                 if remaining > 0:

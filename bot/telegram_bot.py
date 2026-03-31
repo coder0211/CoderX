@@ -271,12 +271,87 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_allowed(uid):
         return
 
-    # Check if this is a git confirm reply
+    text = (update.message.text or "").strip()
+
+    # ── 1. Git confirm reply ────────────────────────────────────────
     if uid in git_confirm_pending:
         await handle_git_confirm(update, ctx)
         return
 
-    await send(update, "🤖 Dùng `/code <task>` để thêm việc vào queue!\n`/help` để xem commands.")
+    # ── 2. Build agent context for ChatGPT ──────────────────────────
+    q = get_queue(uid)
+    session = get_session(uid)
+    live = q.live_status
+    ct = q.current_task
+
+    # Build a context description of what's happening
+    if q.is_running and ct:
+        import time
+        elapsed = ""
+        if live.get("started_at"):
+            secs = int(time.time() - live["started_at"])
+            elapsed = f"{secs // 60}phút {secs % 60}giây"
+
+        phase_vi = {
+            "reasoning": "🧠 đang suy nghĩ",
+            "acting":    "⚡ đang thực thi",
+            "observing": "🔍 đang đánh giá kết quả",
+            "starting":  "🚀 đang khởi động",
+            "idle":      "✅ đang rảnh",
+        }.get(live.get("phase", ""), live.get("phase", ""))
+
+        agent_context = (
+            f"Tôi đang làm việc.\n"
+            f"- Nhiệm vụ: {ct.goal}\n"
+            f"- Trạng thái: {phase_vi}\n"
+            f"- Vòng lặp: {live.get('iteration', 0)}/{live.get('max_iterations', 15)}\n"
+            f"- Đang làm: {live.get('current_action') or 'chuẩn bị'}\n"
+            f"- Săn sóc nhất: {live.get('last_thought', '')[:200]}\n"
+            f"- Kết quả bước trước: {live.get('last_result', '')[:200]}\n"
+            f"- Thời gian đang chạy: {elapsed}\n"
+            f"- Workspace: {ct.workspace}\n"
+            f"- Queue còn: {q.queue_size} task"
+        )
+    else:
+        agent_context = (
+            f"Tôi đang rảnh.\n"
+            f"- Workspace: {session.workspace}\n"
+            f"- Queue: trống"
+        )
+
+    # ── 3. Ask ChatGPT to respond naturally ─────────────────────────
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+
+        response = await client.chat.completions.create(
+            model=config.OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Bạn là CoderX, một AI developer tự hành. "
+                        "Bạn đang trâu đổi với chủ nhân qua Telegram trong khi làm việc.\n\n"
+                        f"Trạng thái hiện tại của bạn:\n{agent_context}\n\n"
+                        "Hãy trả lời câu hỏi của chủ nhân một cách TỰ NHIÊN, NGẮN GỌN, bằng tiếng Việt. "
+                        "Nếu được hỏi đang làm gì, hãy mô tả cụ thể từ trạng thái trên."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            temperature=0.6,
+            max_tokens=400,
+        )
+        reply = response.choices[0].message.content
+        await send(update, reply)
+
+    except Exception as e:
+        # Fallback: simple status
+        if q.is_running and ct:
+            await send(update, f"🔄 Đang chạy task: _{ct.goal}_")
+        else:
+            await send(update, "✅ Rảnh. Dùng `/code <task>` để giao việc!")
+
 
 
 # ─── Bot setup ─────────────────────────────────────────────────────────────────
