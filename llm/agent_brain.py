@@ -120,7 +120,10 @@ Based on the mission, workspace state, and history above:
 2. DECIDE: What single action should be taken next?
 3. EVALUATE: Is the task already complete?
 
-Respond with JSON only:
+Respond with JSON only. Field definitions:
+- `decision`: MUST be one of exactly: "continue", "complete", "stuck", "failed". NEVER use "observe" here.
+- `action.type`: MUST be one of exactly: "antigravity", "shell", "observe". This is separate from `decision`.
+
 {{
   "reasoning": "Your analysis of current state and what needs to be done",
   "decision": "continue | complete | stuck | failed",
@@ -256,7 +259,18 @@ class AgentBrain:
             relevant_files=action_data.get("relevant_files", []),
         )
 
-        decision = Decision(data.get("decision", "continue"))
+        raw_decision = data.get("decision", "continue")
+        try:
+            decision = Decision(raw_decision)
+        except ValueError:
+            # LLM trả về giá trị không hợp lệ (vd: "observe") — fallback về CONTINUE
+            from orchestrator.logger import log
+            log(
+                f"[AgentBrain] Invalid decision value: '{raw_decision}' → fallback to 'continue'",
+                category="Brain",
+                style="yellow",
+            )
+            decision = Decision.CONTINUE
         confidence = int(data.get("confidence", 0))
         decision_reason = data.get("decision_reason", "")
 

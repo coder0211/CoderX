@@ -12,9 +12,11 @@ from orchestrator.logger import log_queue
 @dataclass
 class QueuedTask:
     task_id: int
+    user_id: int
+    chat_id: int
     goal: str
     workspace: str
-    notify: Callable
+    notify: Callable        # Re-created on load
 
 
 class TaskQueue:
@@ -25,13 +27,17 @@ class TaskQueue:
     - Mỗi task chạy đến COMPLETE/STUCK/FAILED trước khi lấy task tiếp
     """
 
-    def __init__(self, max_size: int = 10):
+    def __init__(self, user_id: int, max_size: int = 10):
+        self.user_id = user_id
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_size)
         self._running: bool = False
         self._current_task: Optional[QueuedTask] = None
         self._task_counter: int = 0
         self._worker_task: Optional[asyncio.Task] = None
         self._current_agent = None  # AutonomousAgent instance đang chạy
+        
+        from orchestrator.persistence import PersistenceManager
+        self.persistence = PersistenceManager()
 
     @property
     def is_running(self) -> bool:
@@ -52,7 +58,7 @@ class TaskQueue:
             return dict(self._current_agent.live)
         return {"phase": "idle"}
 
-    def append(self, goal: str, workspace: str, notify: Callable) -> tuple[bool, int, str]:
+    def append(self, goal: str, workspace: str, chat_id: int, notify: Callable) -> tuple[bool, int, str]:
         """
         Thêm task vào queue.
         Returns: (success, task_id, message)
@@ -64,6 +70,8 @@ class TaskQueue:
         self._task_counter += 1
         task = QueuedTask(
             task_id=self._task_counter,
+            user_id=self.user_id,
+            chat_id=chat_id,
             goal=goal,
             workspace=workspace,
             notify=notify,
@@ -71,6 +79,7 @@ class TaskQueue:
 
         try:
             self._queue.put_nowait(task)
+            self._save_queue()
         except asyncio.QueueFull:
             return False, -1, "Queue đầy."
 
@@ -79,6 +88,44 @@ class TaskQueue:
             return True, task.task_id, f"Task #{task.task_id} xếp hàng (vị trí {position})"
         else:
             return True, task.task_id, f"Task #{task.task_id} bắt đầu ngay"
+
+    def _save_queue(self) -> None:
+        """Lưu trạng thái hàng đợi hiện tại xuống đĩa."""
+        pending_list = list(self._queue._queue)
+        tasks_data = []
+        for t in pending_list:
+            tasks_data.append({
+                "task_id":   t.task_id,
+                "user_id":   t.user_id,
+                "chat_id":   t.chat_id,
+                "goal":      t.goal,
+                "workspace": t.workspace,
+            })
+        self.persistence.save_queue(self.user_id, tasks_data)
+
+    def load_from_disk(self, notify_factory: Callable[[int], Callable]) -> int:
+        """
+        Nạp tasks từ đĩa vào hàng đợi.
+        `notify_factory` là hàm nhận `chat_id` và trả về hàm `notify`.
+        """
+        tasks_data = self.persistence.load_queue(self.user_id)
+        count = 0
+        for data in tasks_data:
+            task = QueuedTask(
+                task_id   = data["task_id"],
+                user_id   = data["user_id"],
+                chat_id   = data["chat_id"],
+                goal      = data["goal"],
+                workspace = data["workspace"],
+                notify    = notify_factory(data["chat_id"]),
+            )
+            try:
+                self._queue.put_nowait(task)
+                self._task_counter = max(self._task_counter, task.task_id)
+                count += 1
+            except asyncio.QueueFull:
+                break
+        return count
 
     def start_worker(self) -> None:
         """Khởi động background worker xử lý queue."""
@@ -133,3 +180,4 @@ class TaskQueue:
                 self._queue.task_done()
                 self._running = False
                 self._current_task = None
+                self._save_queue() # Cập nhật lại queue sau khi hoàn thành task

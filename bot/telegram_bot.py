@@ -25,9 +25,22 @@ task_queues: dict[int, TaskQueue] = {}  # user_id → TaskQueue
 git_confirm_pending: dict[int, dict] = {}  # user_id → pending git confirm
 
 
-def get_queue(user_id: int) -> TaskQueue:
+def get_queue(user_id: int, bot=None) -> TaskQueue:
     if user_id not in task_queues:
-        task_queues[user_id] = TaskQueue(max_size=config.MAX_QUEUE_SIZE)
+        q = TaskQueue(user_id=user_id, max_size=config.MAX_QUEUE_SIZE)
+        if bot:
+            # Tái tạo hàm notify từ chat_id
+            def notify_factory(chat_id: int):
+                async def notify(msg: str):
+                    await send_to_chat(bot, chat_id, msg)
+                return notify
+            
+            count = q.load_from_disk(notify_factory)
+            if count > 0:
+                print(f"Loaded {count} tasks for user {user_id}")
+                q.start_worker()
+        
+        task_queues[user_id] = q
     return task_queues[user_id]
 
 
@@ -133,7 +146,7 @@ async def cmd_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     async def notify(msg: str):
         await send_to_chat(bot, chat_id, msg)
 
-    success, task_id, msg = q.append(task_goal, session.workspace, notify)
+    success, task_id, msg = q.append(task_goal, session.workspace, chat_id, notify)
 
     if not success:
         await send(update, f"⚠️ {msg}")
@@ -182,7 +195,8 @@ async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     q = get_queue(uid)
     await q.stop()
-    task_queues[uid] = TaskQueue(max_size=config.MAX_QUEUE_SIZE)
+    task_queues[uid] = TaskQueue(user_id=uid, max_size=config.MAX_QUEUE_SIZE)
+    task_queues[uid].persistence.delete_queue(uid) # Xóa file trên đĩa
     await send(update, "🛑 *Đã dừng agent và xóa queue.*")
 
 
@@ -225,7 +239,7 @@ async def cmd_onboard(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "Viết kết quả chi tiết bằng Tiếng Việt vào file `.coderx/onboarding.md`."
     )
 
-    success, task_id, msg = q.append(goal, session.workspace, notify)
+    success, task_id, msg = q.append(goal, session.workspace, chat_id, notify)
 
     if not success:
         await send(update, f"⚠️ {msg}")
@@ -447,6 +461,13 @@ def create_bot() -> Application:
 
 
 async def setup_commands(app: Application) -> None:
+    # ─── Nạp lại hàng đợi cũ ───────────────────────────────────────────
+    from orchestrator.persistence import PersistenceManager
+    pm = PersistenceManager()
+    users = pm.list_users_with_queues()
+    for uid in users:
+        get_queue(uid, bot=app.bot)
+
     await app.bot.set_my_commands([
         BotCommand("code",      "➕ Thêm coding task vào queue"),
         BotCommand("onboard",   "🔍 Tự khám phá architecture của project"),

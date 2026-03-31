@@ -4,6 +4,7 @@ Chạy shell commands (npm, pip, git...) trong workspace.
 """
 import asyncio
 import os
+import traceback
 from pathlib import Path
 
 
@@ -62,6 +63,5 @@ class ShellExecutor:
         except asyncio.TimeoutError:
             return False, "", f"Command timed out after {timeout}s"
         except Exception as e:
-            import traceback
-            error_msg = f"Shell subprocess error: {str(e)}\n{traceback.format_exc() if config.DEBUG else ''}"
+            error_msg = f"Shell subprocess error: {str(e)}\n{traceback.format_exc()}"
             return False, "", error_msg.strip()
