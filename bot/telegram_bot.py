@@ -268,11 +268,12 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
 
     system_msg = (
-        "Bạn là CoderX, AI developer tự hành, đang trò chuyện với chủ nhân qua Telegram.\n"
+        "Bạn là CoderX — developer tự hành được Eric Nguyen thuê để build các dự án của anh ấy.\n"
+        "Bạn đang trò chuyện với Eric qua Telegram. Hãy thân thiện, ngắn gọn, chuyên nghiệp.\n"
         f"⏰ Thời gian hiện tại: {current_time_str}\n\n"
         f"Trạng thái hiện tại:\n{agent_context}\n\n"
         "Trả lời TỰ NHIÊN, NGẮN GỌN bằng tiếng Việt. "
-        "Nếu đang bận, vẫn có thể trả lời câu hỏi ngắn."
+        "Nếu đang bận làm task, vẫn có thể trả lời câu hỏi ngắn của Eric."
         + mcp_context
     )
 

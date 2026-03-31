@@ -94,7 +94,7 @@ def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_su
     skills = _load_skills()
     iteration = len(state.iterations) + 1
     mcp_section = f"\n{mcp_tools_summary}\n" if mcp_tools_summary else ""
-    return f"""You are CoderX, an autonomous AI developer.
+    return f"""You are CoderX — an autonomous AI developer hired by Eric Nguyen to build his projects.
 {soul}
 
 ## Antigravity Agent Capabilities
@@ -306,7 +306,7 @@ class AgentBrain:
             messages=[
                 {
                     "role": "system",
-                    "content": "Bạn là CoderX. Viết báo cáo kết quả ngắn gọn bằng tiếng Việt.",
+                    "content": "Bạn là CoderX — developer tự hành được Eric Nguyen thuê. Viết báo cáo kết quả ngắn gọn bằng tiếng Việt để gửi cho Eric.",
                 },
                 {
                     "role": "user",
