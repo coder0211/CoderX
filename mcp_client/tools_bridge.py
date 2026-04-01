@@ -41,10 +41,14 @@ class MCPToolsBridge:
         self._ready = False
         self.workspace_root: str | None = None
 
-    async def startup(self) -> None:
+    async def startup(self, force_restart: bool = False) -> None:
         """Kết nối tới tất cả MCP server được cấu hình."""
-        if self._ready:
+        if self._ready and not force_restart:
             return
+
+        if force_restart:
+            log("[MCP Bridge] Force restart requested — shutting down servers...", style="yellow")
+            await self.shutdown()
 
         if self._registry.is_empty():
             log(
@@ -105,18 +109,18 @@ class MCPToolsBridge:
     def _is_safe_path(self, path: str) -> bool:
         """Kiểm tra đường dẫn có nằm trong workspace_root không."""
         if not self.workspace_root:
-            return True # Không có root thì cho phép (mặc định cho các task ngoài agent)
+            return True
             
+        import os
         root = os.path.abspath(self.workspace_root)
         try:
-            # Resolve đường dẫn tuyệt đối
             if not os.path.isabs(path):
-                # Giả định path tương đối so với root
                 target = os.path.abspath(os.path.join(root, path))
             else:
                 target = os.path.abspath(path)
                 
-            return target.startswith(root)
+            # Sử dụng commonpath để đảm bảo logic thư mục chính xác
+            return os.path.commonpath([root]) == os.path.commonpath([root, target])
         except Exception:
             return False
 

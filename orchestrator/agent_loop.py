@@ -73,6 +73,7 @@ class AutonomousAgent:
         
         bridge = get_mcp_bridge()
         bridge.workspace_root = abs_ws
+        # Note: Startup is handled by the Pipeline before running the agent
         await bridge.startup()
 
         state = AgentState(task_goal=task_goal, workspace=workspace)

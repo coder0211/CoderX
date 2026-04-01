@@ -278,6 +278,43 @@ class MCPRegistry:
     def config_file(self) -> Path | None:
         return self._config_path
 
+    def update_server_args(self, name: str, new_args: list[str]) -> bool:
+        """Cập nhật args cho một server (vd: đổi workspace root)."""
+        server = self.get(name)
+        if not server or server.transport != "stdio":
+            return False
+            
+        server.args = new_args
+        log(f"[MCP Registry] Updated args for '{name}': {new_args}", style="dim")
+        return True
+
+    def save_to_file(self) -> bool:
+        """Lưu lại cấu hình hiện tại vào file mcp.json."""
+        if not self._config_path:
+            log("[MCP Registry] No config path to save to", style="yellow")
+            return False
+
+        data = {"mcpServers": {}}
+        for name, cfg in self._servers.items():
+            if cfg.transport == "stdio":
+                data["mcpServers"][name] = {
+                    "command": cfg.command,
+                    "args": cfg.args,
+                    "env": cfg.env,
+                }
+            else:
+                data["mcpServers"][name] = {
+                    "url": cfg.url,
+                }
+
+        try:
+            self._config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            log(f"[MCP Registry] Config saved to [cyan]{self._config_path.name}[/cyan]", style="green")
+            return True
+        except Exception as e:
+            log(f"[MCP Registry] ❌ Failed to save config: {e}", style="bold red")
+            return False
+
     def __len__(self) -> int:
         return len(self._servers)
 
