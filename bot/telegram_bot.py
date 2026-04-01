@@ -53,8 +53,9 @@ def get_queue(user_id: int, bot=None) -> TaskQueue:
 
 class UserSession:
     def __init__(self, user_id: int):
+        import os
         self.user_id = user_id
-        self.workspace: str = config.DEFAULT_WORKSPACE
+        self.workspace: str = os.path.abspath(os.path.expanduser(config.DEFAULT_WORKSPACE))
         self.chat_history: list[dict] = []
 
     def add_message(self, role: str, content: str):
@@ -214,10 +215,16 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     # ── Intent: workspace change ────────────────────────────────────────────────
     if intent == "workspace":
-        new_path = intent_data.get("path", "").strip()
-        if new_path and Path(new_path).exists():
+        import os
+        raw_path = intent_data.get("path", "").strip()
+        if not raw_path:
+             await send(update, "❓ Anh muốn đổi sang thư mục nào nhỉ?")
+             return
+             
+        new_path = os.path.abspath(os.path.expanduser(raw_path))
+        if os.path.exists(new_path):
             session.workspace = new_path
-            await send(update, f"📁 Đã đổi workspace → `{new_path}`")
+            await send(update, f"📁 Đã chuẩn hóa và đổi workspace → `{new_path}`")
         else:
             await send(update, f"❌ Đường dẫn không tồn tại: `{new_path}`")
         return

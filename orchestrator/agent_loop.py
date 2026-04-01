@@ -69,12 +69,9 @@ class AutonomousAgent:
 
         # Log absolute path for transparency
         abs_ws = os.path.abspath(os.path.expanduser(workspace))
-        log(f"Working Workspace: [cyan]{abs_ws}[/cyan]", category="Workspace", style="bold yellow")
-        
         bridge = get_mcp_bridge()
-        bridge.workspace_root = abs_ws
-        # Note: Startup is handled by the Pipeline before running the agent
-        await bridge.startup()
+        # Đảm bảo MCP server luôn đồng bộ với workspace hiện tại trước khi bắt đầu
+        await bridge.sync_with_workspace(workspace)
 
         state = AgentState(task_goal=task_goal, workspace=workspace)
         self.memory = MemoryManager(workspace)

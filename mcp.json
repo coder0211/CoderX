@@ -2,27 +2,43 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "--quiet", "@modelcontextprotocol/server-filesystem", "/Users/hoa.nguyen3/Documents/TEST_BOT"],
+      "args": [
+        "-y",
+        "--quiet",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/hoa.nguyen3/Documents/TEST_BOT"
+      ],
       "env": {
         "NPM_CONFIG_LOGLEVEL": "error",
         "NODE_NO_WARNINGS": "1"
-      }
+      },
+      "cwd": "/Users/hoa.nguyen3/Documents/TEST_BOT"
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "--quiet", "@modelcontextprotocol/server-memory"],
+      "args": [
+        "-y",
+        "--quiet",
+        "@modelcontextprotocol/server-memory"
+      ],
       "env": {
         "NPM_CONFIG_LOGLEVEL": "error",
         "NODE_NO_WARNINGS": "1"
-      }
+      },
+      "cwd": null
     },
     "sequential-thinking": {
       "command": "npx",
-      "args": ["-y", "--quiet", "@modelcontextprotocol/server-sequential-thinking"],
+      "args": [
+        "-y",
+        "--quiet",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
       "env": {
         "NPM_CONFIG_LOGLEVEL": "error",
         "NODE_NO_WARNINGS": "1"
-      }
+      },
+      "cwd": null
     }
   }
 }

@@ -23,10 +23,9 @@ class Config:
 
 
     # Workspace
-    DEFAULT_WORKSPACE: str = os.getenv(
-        "DEFAULT_WORKSPACE",
-        os.path.expanduser("~/Documents"),
-    )
+    DEFAULT_WORKSPACE: str = os.path.abspath(os.path.expanduser(
+        os.getenv("DEFAULT_WORKSPACE", "~/Documents")
+    ))
 
 
     # Autonomous Agent

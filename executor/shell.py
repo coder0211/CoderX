@@ -17,7 +17,7 @@ class ShellExecutor:
         "git ", "mkdir ", "touch ", "ls ", "cat ",
         "node ", "ts-node ", "pytest ", "jest ",
         "go ", "cargo ", "make ",
-        "echo ", "cp ", "mv ",
+        "echo ", "cp ", "mv ", "open ",
     ]
 
     def __init__(self, workspace: str):
@@ -83,7 +83,7 @@ class ShellExecutor:
                 stderr.decode(errors="replace"),
             )
         except asyncio.TimeoutError:
-            return False, "", f"Command timed out after {timeout}s"
+            return False, "", f"Command timed out after {timeout}s. ⚠️ Do NOT run long-running/blocking commands (like servers or watches) in the shell tool."
         except Exception as e:
             error_msg = f"Shell subprocess error: {str(e)}\n{traceback.format_exc()}"
             return False, "", error_msg.strip()

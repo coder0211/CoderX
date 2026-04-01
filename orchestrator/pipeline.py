@@ -51,9 +51,6 @@ class Pipeline:
         """
         Entry point chính: nhận yêu cầu → plan → execute → return results.
         """
-        # 0. Đồng bộ MCP workspace
-        await self._sync_mcp_workspace(workspace)
-
         # 1. Lập kế hoạch
         await self._notify("🧠 *ChatGPT đang phân tích và lập kế hoạch...*")
         plan = await self.planner.plan(user_request, workspace)
@@ -190,43 +187,6 @@ class Pipeline:
             summary=truncated,
             shell_output=output,
         )
-
-    async def _sync_mcp_workspace(self, workspace: str):
-        """Đảm bảo mcp.json đồng bộ với workspace hiện tại."""
-        from mcp_client.tools_bridge import get_mcp_bridge
-        import os
-
-        abs_ws = os.path.abspath(os.path.expanduser(workspace))
-        bridge = get_mcp_bridge()
-        registry = bridge._registry # Truy cập nội bộ registry
-        
-        # 1. Tìm server 'filesystem'
-        fs_server = registry.get("filesystem")
-        if not fs_server:
-            return
-
-        # 2. Kiểm tra args (giả định path là arg cuối cùng)
-        current_args = fs_server.args
-        if not current_args or current_args[-1] != abs_ws:
-            await self._notify(f"🔄 *Đồng bộ Workspace:* Cập nhật MCP server root ({abs_ws})...")
-            
-            # Cập nhật trong bộ nhớ
-            new_args = list(current_args)
-            if not any("@modelcontextprotocol/server-filesystem" in a for a in new_args):
-                # Dự phòng nếu args trống
-                new_args = ["-y", "@modelcontextprotocol/server-filesystem", abs_ws]
-            else:
-                new_args[-1] = abs_ws
-            
-            registry.update_server_args("filesystem", new_args)
-            registry.save_to_file()
-            
-            # Yêu cầu bridge restart
-            await bridge.startup(force_restart=True)
-        else:
-            # Ngay cả khi ko đổi mcp.json, vẫn cần đảm bảo bridge đã nạp abs_ws vào bộ lọc
-            bridge.workspace_root = abs_ws
-            await bridge.startup()
 
     async def _git_commit(self, step: Step, workspace: str):
         """Tự động commit kết quả sau mỗi bước thành công."""

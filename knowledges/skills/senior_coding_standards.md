@@ -1,31 +1,25 @@
-# Skill: Senior Coding Standards — CoderX Edition
+# CoderX Senior Coding Standards
 
-## Mục đích
-Nâng tầm CoderX từ việc "viết code chạy được" thành "viết code Senior": duy trì, mở rộng và bảo mật.
+Đây là bộ tiêu chuẩn bắt buộc cho mọi Developer Agent tại CoderX. Mục tiêu là tạo ra mã nguồn chất lượng cao, dễ bảo trì và vận hành mượt mà.
 
-## 1. Nguyên tắc Chung (Core Principles)
-- **KISS (Keep It Simple, Stupid):** Đừng làm phức tạp hóa vấn đề. Giải pháp đơn giản nhất thường là giải pháp tốt nhất.
-- **DRY (Don't Repeat Yourself):** Tránh lặp lại logic. Sử dụng hàm và module để tái sử dụng.
-- **YAGNI (You Ain't Gonna Need It):** Đừng xây dựng những thứ chưa cần tới.
-- **SOLID:** Áp dụng cho các thiết kế Class và Module lớn.
+## 1. Nguyên tắc "Không Giữ Chỗ" (No Placeholders)
+- **TUYỆT ĐỐI CẤM** sử dụng các comment như `// logic goes here`, `/* TODO */`, hay `# implement later`.
+- Mọi file được tạo hoặc chỉnh sửa phải **HOÀN THIỆN** và **CHẠY ĐƯỢC NGAY**.
+- Nếu nhiệm vụ quá lớn, hãy chia nhỏ thành các module nhưng mỗi module phải đầy đủ logic của nó.
 
-## 2. Tiêu chuẩn Python (Pythonic Seniority)
-- **Type Hints:** Luôn sử dụng type hints cho tất cả các hàm và biến (trừ trường hợp cực kỳ đơn giản).
-- **Docstrings:** Mọi hàm/class phải có docstring theo chuẩn Google hoặc NumPy. Giải thích cả THỜI ĐIỂM và TẠI SAO, thay vì chỉ mô tả CÁI GÌ.
-- **Logging:** Sử dụng module `logging` thay vì `print`. Không dùng `try/except: pass` mà không ghi log lỗi.
-- **Naming:** Tuân thủ PEP 8 (`snake_case` cho hàm/biến, `PascalCase` cho class).
+## 2. Kiến trúc & Cấu trúc (Architecture)
+- **Tách biệt mối quan tâm (Separation of Concerns)**: HTML cho cấu trúc, CSS cho giao diện, JS cho logic.
+- **Biến & Hằng số**: Đặt tên có ý nghĩa, sử dụng `const` và `let` thay vì `var`.
+- **Error Handling**: Sử dụng `try-catch` cho các thao tác rủi ro (network, file I/O).
 
-## 3. Quy trình Tự Phê bình (Self-Critique)
-Trước khi coi là "Hoàn thành", CoderX phải tự hỏi:
-1. "Nếu Eric đọc code này trong 6 tháng tới, anh ấy có hiểu ngay không?"
-2. "Tôi đã xử lý các trường hợp biên (edge cases) chưa?"
-3. "Có chỗ nào có thể tối ưu hiệu suất hoặc bộ nhớ không?"
-4. "Code này có dễ viết Test không?"
+## 3. Thẩm mỹ & UX (UX/UI)
+- Sử dụng Google Fonts (với dự án web) để tạo cảm giác cao cấp.
+- Luôn đảm bảo tính **Responsive** (chạy được trên cả màn hình điện thoại và máy tính).
+- Thêm các hiệu ứng chuyển cảnh (transitions) hoặc micro-animations để tăng trải nghiệm người dùng.
 
-## 4. Cưỡng chế Kiểm tra (Verification)
-- **Linter:** Ưu tiên dùng `ruff` để dọn dẹp code rác và import dư thừa.
-- **Type Checker:** Dùng `mypy` để đảm bảo an toàn về kiểu dữ liệu.
-- **Tests:** Viết `pytest` cho các logic nghiệp vụ quan trọng.
+## 4. Kiểm soát Vận hành (Operational Safety)
+- **Chặn lệnh treo máy**: Không bao giờ chạy các lệnh interactive liên tục (`npm start`, `watch`) trong shell tool trừ khi có cơ chế nền.
+- **Normalize paths**: Luôn sử dụng đường dẫn tương đối từ gốc project để tránh lỗi "Access Denied".
 
 ---
-**Ghi chú:** Code không có Type hints và Docstrings mặc định bị coi là "Junior" và cần được Refactor ngay lập tức.
+*Mọi hành vi vi phạm tiêu chuẩn trên sẽ bị coi là lỗi Seniority.*

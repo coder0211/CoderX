@@ -111,6 +111,7 @@ class MCPClientManager:
             command=cfg.command,
             args=cfg.args,
             env={**os.environ, **cfg.env} if cfg.env else None,
+            cwd=cfg.cwd,
         )
 
         # stdio_client là async context manager: tạo streams rồi trả về (read, write)

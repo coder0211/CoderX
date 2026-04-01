@@ -4,6 +4,7 @@ Hỗ trợ append nhiều tasks — bot tự xử lý lần lượt đến khi h
 User có thể gửi nhiều /code commands, chúng se được xếp hàng và tự chạy.
 """
 import asyncio
+import os
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 from orchestrator.logger import log_queue
@@ -68,12 +69,15 @@ class TaskQueue:
             return False, -1, f"Queue đầy ({config.MAX_QUEUE_SIZE} tasks). Đợi xong rồi thêm."
 
         self._task_counter += 1
+        # Normalize workspace path to avoid typos and relative path issues
+        norm_workspace = os.path.abspath(os.path.expanduser(workspace))
+        
         task = QueuedTask(
             task_id=self._task_counter,
             user_id=self.user_id,
             chat_id=chat_id,
             goal=goal,
-            workspace=workspace,
+            workspace=norm_workspace,
             notify=notify,
         )
 
@@ -111,12 +115,15 @@ class TaskQueue:
         tasks_data = self.persistence.load_queue(self.user_id)
         count = 0
         for data in tasks_data:
+            # Normalize reloaded paths (fixes legacy typos)
+            norm_workspace = os.path.abspath(os.path.expanduser(data["workspace"]))
+            
             task = QueuedTask(
                 task_id   = data["task_id"],
                 user_id   = data["user_id"],
                 chat_id   = data["chat_id"],
                 goal      = data["goal"],
-                workspace = data["workspace"],
+                workspace = norm_workspace,
                 notify    = notify_factory(data["chat_id"]),
             )
             try:

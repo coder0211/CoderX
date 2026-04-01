@@ -64,13 +64,15 @@ class MCPServerConfig:
     command: str = ""           # Lệnh chạy server (vd: "npx", "python", "uvx")
     args: list[str] = field(default_factory=list)      # Tham số CLI
     env: dict[str, str] = field(default_factory=dict)  # ENV vars bổ sung
+    cwd: str | None = None      # Thư mục làm việc cho process
 
     # ── http / sse fields ─────────────────────────────────────────────────────
     url: str = ""               # URL của server (vd: "http://localhost:8765/sse")
 
     def __str__(self) -> str:
         if self.transport == "stdio":
-            return f"[stdio] {self.name}: {self.command} {' '.join(self.args)}"
+            cwd_info = f" (cwd: {self.cwd})" if self.cwd else ""
+            return f"[stdio] {self.name}: {self.command} {' '.join(self.args)}{cwd_info}"
         return f"[{self.transport}] {self.name}: {self.url}"
 
 
@@ -143,6 +145,8 @@ class MCPRegistry:
             server = self._parse_server(name, cfg_raw)
             if server:
                 self._servers[name] = server
+                # Cố định CWD (nếu có trong json)
+                server.cwd = cfg_raw.get("cwd")
                 log(f"[MCP Registry] ✅ Registered: {server}", style="dim")
 
         log(
@@ -278,14 +282,17 @@ class MCPRegistry:
     def config_file(self) -> Path | None:
         return self._config_path
 
-    def update_server_args(self, name: str, new_args: list[str]) -> bool:
-        """Cập nhật args cho một server (vd: đổi workspace root)."""
+    def update_server_args(self, name: str, new_args: list[str], new_cwd: str | None = None) -> bool:
+        """Cập nhật args (và cwd) cho một server (vd: đổi workspace root)."""
         server = self.get(name)
         if not server or server.transport != "stdio":
             return False
             
         server.args = new_args
-        log(f"[MCP Registry] Updated args for '{name}': {new_args}", style="dim")
+        if new_cwd:
+            server.cwd = new_cwd
+            
+        log(f"[MCP Registry] Updated args for '{name}': {new_args} (cwd: {server.cwd})", style="dim")
         return True
 
     def save_to_file(self) -> bool:
@@ -301,6 +308,7 @@ class MCPRegistry:
                     "command": cfg.command,
                     "args": cfg.args,
                     "env": cfg.env,
+                    "cwd": cfg.cwd,
                 }
             else:
                 data["mcpServers"][name] = {

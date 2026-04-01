@@ -162,6 +162,39 @@ class MCPToolsBridge:
         result = await self._manager.call_tool(tool_name, arguments)
         return result
 
+    async def sync_with_workspace(self, workspace_path: str) -> None:
+        """Đảm bảo mcp.json và bridge đồng bộ với workspace hiện tại."""
+        import os
+        abs_ws = os.path.abspath(os.path.expanduser(workspace_path))
+        
+        # 1. Cập nhật bộ lọc an toàn của bridge
+        self.workspace_root = abs_ws
+
+        # 2. Kiểm tra và cập nhật cấu hình filesystem trong registry/mcp.json
+        fs_server = self._registry.get("filesystem")
+        if fs_server and fs_server.transport == "stdio":
+            current_args = fs_server.args
+            current_cwd = fs_server.cwd
+            # Mismatch nếu args cuối không khớp HOẶC cwd không khớp
+            if not current_args or current_args[-1] != abs_ws or current_cwd != abs_ws:
+                log(f"[MCP Bridge] 🔄 Workspace/CWD mismatch! Syncing to: {abs_ws}", style="yellow")
+                
+                new_args = list(current_args)
+                if not any("server-filesystem" in a for a in new_args):
+                    new_args = ["-y", "@modelcontextprotocol/server-filesystem", abs_ws]
+                else:
+                    new_args[-1] = abs_ws
+                
+                self._registry.update_server_args("filesystem", new_args, new_cwd=abs_ws)
+                self._registry.save_to_file()
+                
+                # Cần restart để server process nhận root và CWD mới
+                await self.startup(force_restart=True)
+                return
+
+        # Nếu không cần restart mcp server, vẫn đảm bảo bridge đã sẵn sàng
+        await self.startup()
+
     # ── Context manager ───────────────────────────────────────────────────────
 
     async def __aenter__(self) -> "MCPToolsBridge":
