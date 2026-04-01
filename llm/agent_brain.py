@@ -17,9 +17,6 @@ from config import config
 # ─── Enums & Data Models ──────────────────────────────────────────────────────
 
 class ActionType(str, Enum):
-    ANTIGRAVITY_AGENT = "antigravity_agent" # Full autonomous coding
-    ANTIGRAVITY_ASK   = "antigravity_ask"   # Research & Analysis (Browser-heavy)
-    ANTIGRAVITY_EDIT  = "antigravity_edit"  # Targeted file modifications
     SHELL             = "shell"             # Run shell command
     OBSERVE           = "observe"           # Observe only
     MCP               = "mcp"               # Call external MCP tool
@@ -38,10 +35,10 @@ class WorkflowState(str, Enum):
 class Action:
     type: ActionType
     title: str                          # Mô tả ngắn cho Telegram
-    prompt: str                         # Prompt gửi Antigravity / desc hành động
+    prompt: str                         # Prompt cho Native Agent
     shell_command: Optional[str] = None # Nếu type == SHELL
     reasoning: str = ""                 # Tại sao chọn action này
-    relevant_files: list[str] = field(default_factory=list) # Files cần đính kèm cho Antigravity
+    relevant_files: list[str] = field(default_factory=list) # Files cần đính kèm cho Native Tools
     mcp_tool: Optional[str] = None      # Nếu type == MCP: "server/tool_name"
     mcp_arguments: dict = field(default_factory=dict)  # Nếu type == MCP: tham số của tool
 
@@ -112,19 +109,26 @@ def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_su
 ## OpenClaw Memory Bridge (Shared Context)
 {memory if memory else '(No memory file yet)'}
 
-## Your Current Persona: Executor (Antigravity Style)
-You are currently acting as the **Executor**. Your sole focus is to fulfill the **Current Mission** below using your available tools.
+## Your Current Persona: Autonomous Developer
+You are **CoderX**, a world-class autonomous senior software engineer. Your goal is to solve the **Current Mission** independently using your available tools. You do not delegate tasks to others; you perform them yourself.
 
-## Antigravity Agent Capabilities
-You are controlling the Antigravity Agent. It is extremely powerful and can:
-- Read/Edit multiple files simultaneously.
-- Use a **Browser** to research docs, find libraries, or test web UIs.
-- Use a **Terminal** to run tests, build projects, or debug.
-- Self-correct errors by observing tool output.
+## Your Atomic Toolset
+You have direct access to the environment via:
+1. **MCP Tools** (type="mcp"):
+   - `filesystem/list_dir`: See directory contents.
+   - `filesystem/read_file`: Read source code for context.
+   - `filesystem/write_file`: Create or update files.
+   - `filesystem/move_file`: Refactor project structure.
+2. **Shell** (type="shell"):
+   - Run tests (`pytest`, `npm test`).
+   - Install dependencies (`pip`, `npm`).
+   - Build and check types (`npm run build`, `mypy`).
+   - Git operations.
 
 ## Skills Reference
 {skills if skills else "(no skills loaded)"}
 {mcp_section}
+
 ## Current Mission
 Goal: {state.task_goal}
 Workspace: {state.workspace}
@@ -138,13 +142,14 @@ Iteration: {iteration} / {config.MAX_ITERATIONS}
 
 ## Your Task Now
 Based on the mission, workspace state, and history above:
-1. REASON: What is the current state? What needs to be done next?
-2. NEXT STATE: Should you move to 'coding', 'verifying', 'awaiting_review', or are you 'completed'?
-3. ACTION: What single action to take to achieve this state?
+1. REASON: Analyze the current state. What is missing? What errors occurred?
+2. PLAN: Formulate the next atomic step to move closer to the goal.
+3. ACT: Execute the step using a single action (MCP or Shell).
+4. NEXT STATE: Should you move to 'coding', 'verifying', 'awaiting_review', or are you 'completed'?
 
 Respond with JSON only. Field definitions:
 - `next_state`: MUST be one of exactly: "planning", "coding", "verifying", "awaiting_review", "completed", "failed".
-- `action.type`: MUST be one of exactly: "antigravity_agent", "antigravity_ask", "antigravity_edit", "shell", "observe", "mcp". This is separate from `next_state`.
+- `action.type`: MUST be one of exactly: "shell", "observe", "mcp".
 
 {{
   "reasoning": "Your analysis of current state and what needs to be done",
@@ -152,52 +157,31 @@ Respond with JSON only. Field definitions:
   "confidence": 0-100,
   "decision_reason": "Why you made this decision",
   "action": {{
-    "type": "antigravity_agent | antigravity_ask | antigravity_edit | shell | observe | mcp",
+    "type": "shell | observe | mcp",
     "title": "Short title for this action (Vietnamese OK)",
     "reasoning": "Why this specific action",
-    "prompt": "Full detailed prompt for Antigravity agent (English, very specific)",
-    "relevant_files": ["list", "of", "relative", "paths", "to", "attach"],
-    "shell_command": null,
-    "mcp_tool": null,
+    "prompt": "Specific description of what you are trying to achieve (English)",
+    "shell_command": "The actual shell command to run if type=shell",
+    "mcp_tool": "qualified tool name if type=mcp",
     "mcp_arguments": {{}}
   }}
 }}
 
-## Antigravity Modes Guide:
-1. `antigravity_agent`: Default for most tasks. Use when you want Antigravity to autonomously solve a problem from start to finish. **CRITICAL**: You MUST prefer this for ALL coding, directory creation, or file writing tasks instead of shell/mcp.
-2. `antigravity_ask`: Use for research, documentation lookup, or explaining complex logic. This mode leverages the **Browser** heavily.
-3. `antigravity_edit`: Use when you have a very specific, small change to make to one or more files.
-
-## Antigravity Tools:
-Encourage Antigravity to use its internal tools in your prompt:
-- **Browser**: "Search the web for...", "Read the documentation at...", "Verify the UI behavior on localhost..."
-- **Terminal**: "Run the tests...", "Check the server logs...", "Install missing dependencies..."
-- **Python**: "Run this script to process data..."
-
-Rules for Antigravity Prompts:
-- Be VERY specific. Give context, requirements, and expected behavior.
-- ENCOURAGE the agent to use its Browser or Terminal if helpful (e.g. "Check documentation on [URL] if unsure").
-- **VERIFICATION**: You MUST verify the results of previous actions in the workspace. Do not assume success if the monitor says 'idle_done'.
-- **CRITICAL**: If you just requested a file/folder to be created, and it is NOT visible in the "Workspace State" (current files) above, the action FAILED or is still pending. **DO NOT** mark as 'complete' until you see the evidence in the snapshot.
-- **Important**: Identify up to 10 most relevant files from the Workspace State above and list them in "relevant_files". These will be pre-opened for the agent.
-- End prompts with: "When done, create `.coderx/step_{iteration}_done.json` with {{\"status\":\"done\",\"summary\":\"...\",\"files_changed\":[...]}}"
+## Guidelines for Success:
+- **Think before you act**: Always read the files you intend to modify first.
+- **Atomic steps**: One action at a time. Don't try to solve the whole mission in one iteration.
+- **Verification**: After writing code, use the Shell to run tests or linting to verify your work.
+- **Self-Correction**: If a Shell command or MCP tool fails, analyze the error and fix it in the next iteration.
+- **Completeness**: Only mark as 'completed' when you have verified that the requirements are met.
 
 MCP Rules (type="mcp"):
-- Use MCP when you need to call an external tool (filesystem, GitHub, DB, search, etc.).
-- CRITICAL: You MUST set `action.type` strictly to "mcp" (NEVER set it to "filesystem", "github", etc).
-- Set `mcp_tool` to the qualified name: "server_name/tool_name" (e.g. "filesystem/read_file").
-- Set `mcp_arguments` to the tool's required parameters as a JSON object.
-- Only use MCP tools that are listed in the Available MCP Tools section of this prompt.
+- Use MCP for all filesystem operations.
+- Set `mcp_tool` to "filesystem/read_file", "filesystem/write_file", etc.
+- Set `mcp_arguments` accurately according to the tool's schema.
 
 Shell Rules:
-- Only npm/pip/git/pytest/python/node/go/ls/cat/mkdir allowed.
-- For git: follow Git Skill (safe auto, risky confirm).
-
-Observation States:
-- 'cancelled_continue': Antigravity timed out (15min) — check what was done and continue.
-- 'idle_done': No file changes detected for 60s. **WARNING**: This may mean the agent finished OR it got stuck/failed to signal. You MUST verify the work now via the snapshot.
-- 'git_confirm': User asked to confirm push — check git_confirmed.json.
-- 'done': Agent explicitly signaled completion. Still, verify via snapshot.
+- Use Shell for tests, builds, and dependency management.
+- DO NOT use shell (cat, echo, mkdir) for filesystem tasks if MCP filesystem tools are available.
 """
 
 
@@ -300,7 +284,7 @@ class AgentBrain:
         data = json.loads(raw)
         action_data = data.get("action", {})
         
-        raw_action_type = action_data.get("type", "antigravity_agent")
+        raw_action_type = action_data.get("type", "mcp")
         try:
             parsed_action_type = ActionType(raw_action_type)
         except ValueError:
@@ -311,8 +295,6 @@ class AgentBrain:
                 style="yellow",
             )
             parsed_action_type = ActionType.MCP
-            if not action_data.get("mcp_tool"):
-                action_data["mcp_tool"] = raw_action_type
 
         action = Action(
             type=parsed_action_type,
@@ -321,8 +303,8 @@ class AgentBrain:
             shell_command=action_data.get("shell_command"),
             reasoning=action_data.get("reasoning", ""),
             relevant_files=action_data.get("relevant_files", []),
-            mcp_tool=action_data.get("mcp_tool") or action_data.get("mcptool") or action_data.get("mcpTool"),
-            mcp_arguments=action_data.get("mcp_arguments") or action_data.get("mcparguments") or action_data.get("mcpArguments") or {},
+            mcp_tool=action_data.get("mcp_tool"),
+            mcp_arguments=action_data.get("mcp_arguments") or {},
         )
 
         raw_state = data.get("next_state", "coding")

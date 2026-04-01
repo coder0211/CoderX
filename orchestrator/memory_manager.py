@@ -20,7 +20,7 @@ class MemoryManager:
         if not self.memory_file.exists():
             content = (
                 "# 🧠 CoderX Long-Term Memory (OpenClaw Bridge)\n"
-                "Đây là bộ nhớ liên tục chia sẻ giữa Orchestrator và Antigravity Agent.\n\n"
+                "Đây là bộ nhớ liên tục chia sẻ giữa các thành phần của CoderX.\n\n"
                 "## 🎯 Mục tiêu hiện tại\n"
                 "(Chưa có mục tiêu nào)\n\n"
                 "## 📜 Lịch sử các bước\n"
@@ -31,7 +31,7 @@ class MemoryManager:
         """Reset bộ nhớ cho một task mới."""
         content = (
             "# 🧠 CoderX Long-Term Memory (OpenClaw Bridge)\n"
-            "Đây là bộ nhớ liên tục chia sẻ giữa Orchestrator và Antigravity Agent.\n"
+            "Đây là bộ nhớ liên tục chia sẻ giữa các thành phần của CoderX.\n"
             "Mọi thay đổi, quyết định quan trọng đều được ghi lại ở đây.\n\n"
             "## 🎯 Mục tiêu hiện tại\n"
             f"**[ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ]** {task_goal}\n\n"

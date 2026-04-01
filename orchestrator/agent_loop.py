@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Callable, Optional
 from orchestrator.logger import log, log_agent, console
 
-from executor.antigravity import AntigravityExecutor
 from executor.shell import ShellExecutor
 from llm.agent_brain import (
     Action, ActionType, AgentBrain, AgentIteration,
@@ -26,14 +25,13 @@ class AutonomousAgent:
 
     Vòng lặp:
     1. REASON  — ChatGPT phân tích state, quyết định next action
-    2. ACT     — Thực thi action (Antigravity hoặc Shell)
+    2. ACT     — Thực thi action (MCP hoặc Shell)
     3. OBSERVE — Thu thập kết quả, cập nhật state
     4. REPEAT  — Cho đến khi COMPLETE / STUCK / FAILED / max iterations
     """
 
     def __init__(self, notify: Optional[Callable] = None):
         self.brain = AgentBrain()
-        self.antigravity = AntigravityExecutor()
         self.notify = notify
         # MCP bridge — kết nối tới external MCP servers
         self.mcp = get_mcp_bridge() if config.MCP_ENABLED else None
@@ -92,7 +90,6 @@ class AutonomousAgent:
             silent=True
         )
 
-        import builtins
         current_state = WorkflowState.PLANNING
         iteration = 0
 
@@ -230,17 +227,7 @@ class AutonomousAgent:
     ) -> Observation:
         """Thực thi một action, trả về observation."""
 
-        if action.type in (ActionType.ANTIGRAVITY_AGENT, ActionType.ANTIGRAVITY_ASK, ActionType.ANTIGRAVITY_EDIT):
-            # Map action type back to CLI mode
-            mode_map = {
-                ActionType.ANTIGRAVITY_AGENT: "agent",
-                ActionType.ANTIGRAVITY_ASK:   "ask",
-                ActionType.ANTIGRAVITY_EDIT:  "edit",
-            }
-            mode = mode_map.get(action.type, "agent")
-            return await self._act_antigravity(action, workspace, monitor, iteration, mode=mode)
-
-        elif action.type == ActionType.SHELL:
+        if action.type == ActionType.SHELL:
             return await self._act_shell(action, workspace)
 
         elif action.type == ActionType.MCP:
@@ -253,101 +240,6 @@ class AutonomousAgent:
                 summary="Observed current state without taking action",
             )
 
-    async def _act_antigravity(
-        self,
-        action: Action,
-        workspace: str,
-        monitor: WorkspaceMonitor,
-        iteration: int,
-        mode: str = "agent",
-    ) -> Observation:
-        """Gọi Antigravity Agent và đợi kết quả."""
-        prompt_preview = action.prompt[:150] + "..." if len(action.prompt) > 150 else action.prompt
-        await self._say(
-            f"🚀 *Khởi chạy Antigravity Agent*\n"
-            f"💬 Yêu cầu: _{prompt_preview}_\n"
-            f"📂 Files đính kèm: `{', '.join(action.relevant_files) or 'none'}`",
-            silent=True
-        )
-
-        # OpenClaw Memory Bridge Injection
-        memory_file = str(Path(workspace) / ".coderx" / "MEMORY.md")
-        context_files = list(action.relevant_files) if action.relevant_files else []
-        if memory_file not in context_files and Path(memory_file).exists():
-            context_files.insert(0, memory_file)
-
-        success, msg = await self.antigravity.run(
-            prompt=action.prompt,
-            workspace=workspace,
-            mode=mode,
-            context_files=context_files,
-            step_id=iteration,
-        )
-
-        if not success:
-            return Observation(
-                action=action,
-                status="error",
-                summary=f"Failed to call Antigravity: {msg}",
-            )
-
-        await self._say(
-            f"⏳ Antigravity Agent đang chạy...\n"
-            f"_(Tối đa {config.STEP_TIMEOUT//60} phút — "
-            f"idle {config.STEP_IDLE_TIMEOUT}s không có changes → tự sang bước tiếp)_",
-            silent=True
-        )
-
-        result = await monitor.wait_for_step_done(
-            step_id=iteration,
-            progress_callback=self._say,
-        )
-
-        status = result["status"]
-
-        # ── done / idle_done: all good ────────────────────────────────────────
-        if status in ("done", "idle_done"):
-            icon = "✅" if status == "done" else "💤"
-            await self._say(f"{icon} Antigravity xong ({result['elapsed']:.0f}s)", silent=True)
-
-        # ── cancelled_continue: timeout but NOT an error ──────────────────────
-        elif status == "cancelled_continue":
-            await self._say(
-                f"⚡ Bước đã chạy hơn {config.STEP_TIMEOUT//60} phút — "
-                f"tự cancel, chuyển tiếp. Brain sẽ đánh giá lại.",
-                silent=True
-            )
-
-        # ── git_confirm: ask user, wait for answer ────────────────────────────
-        elif status == "git_confirm":
-            git_cmd = result.get("git_command", "")
-            await self._ask_git_confirm(workspace, git_cmd)
-            # Return with special status so Brain knows to check git_confirmed.json
-            result["summary"] = f"Git confirm requested: {git_cmd}"
-
-        return Observation(
-            action=action,
-            status=status,
-            summary=result["summary"],
-            files_changed=result["files_changed"],
-            elapsed=result["elapsed"],
-        )
-
-    async def _ask_git_confirm(
-        self,
-        workspace: str,
-        git_command: str,
-    ) -> None:
-        """Thông báo cho user qua notify, yêu cầu confirm git."""
-        await self._say(
-            f"⚠️ *[GIT CONFIRM]*\n"
-            f"Lệnh: `{git_command}`\n"
-            f"Gửi *YES* để xác nhận hoặc *NO* để bỏ qua.\n"
-            f"_(Tự bỏ qua sau {config.GIT_CONFIRM_TIMEOUT//60} phút nếu không trả lời)_",
-            silent=False
-        )
-        # Bot handler sẽ pick up reply và ghi git_confirmed.json
-        # Agent Brain sẽ check file này trong lần lặp tiếp theo
 
     async def _act_shell(self, action: Action, workspace: str) -> Observation:
         """Chạy shell command."""

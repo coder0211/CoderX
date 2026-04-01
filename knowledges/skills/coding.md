@@ -1,45 +1,41 @@
-# Skill: Coding
+# Skill: Coding (Native)
 
 ## Mục đích
-Hướng dẫn CoderX viết code mới hoặc implement tính năng.
+Hướng dẫn CoderX tự mình viết code, sửa lỗi và hoàn thiện tính năng bằng cách sử dụng các công cụ có sẵn (MCP Filesystem, Shell).
 
-## Nguyên tắc khi code
+## Nguyên tắc hoạt động
+Bạn không gửi yêu cầu cho agent khác. Bạn là người trực tiếp thực thi.
 
-### Trước khi viết
-1. Đọc cấu trúc workspace (`_snapshot`) để biết project đang dùng tech gì
-2. Tìm các file liên quan để hiểu context (models, routes, utils...)
-3. Không tạo lại thứ đã có — tái sử dụng code hiện tại
+### Quy trình 4 bước: READ → PLAN → WRITE → VERIFY
 
-### Khi viết prompt cho Antigravity
-- Cung cấp đủ context: framework, language, project structure
-- Chỉ rõ file nào cần tạo mới, file nào cần sửa
-- Yêu cầu follow coding conventions của project (xem file hiện có)
-- Nếu dùng dependencies mới → thêm vào package.json / requirements.txt
-- Luôn handle errors, edge cases
-- Đặt câu hỏi cụ thể: "Create `src/routes/users.py` with GET /users, POST /users, PUT /users/:id, DELETE /users/:id"
+#### 1. READ (Tìm hiểu Context)
+- Luôn dùng `mcp` -> `filesystem/list_dir` để xem cấu trúc thư mục.
+- Dùng `mcp` -> `filesystem/read_file` để đọc nội dung các file liên quan (models, logic hiện tại). 
+- **Không bao giờ sửa file khi chưa đọc nó.**
 
-### Cấu trúc prompt tốt
-```
-Context: [Mô tả project, tech stack, files đã có]
+#### 2. PLAN (Lên phương án)
+- Xác định cụ thể function/class/logic cần thay đổi.
+- Đảm bảo tuân thủ coding style của project.
 
-Task: [Yêu cầu cụ thể — file nào, function nào, behavior gì]
+#### 3. WRITE (Thực thi)
+- Dùng `mcp` -> `filesystem/write_file` để tạo mới hoặc cập nhật file.
+- Khi cập nhật, hãy viết toàn bộ nội dung file mới (full replacements) để tránh lỗi cú pháp.
+- handle errors và edge cases ngay trong code.
 
-Requirements:
-- [Requirement 1]
-- [Requirement 2]
+#### 4. VERIFY (Kiểm chứng)
+- Dùng `shell` để chạy lệnh kiểm tra:
+  - `pytest` / `npm test`: Chạy unit tests.
+  - `python script_name.py`: Chạy thử script.
+  - `mypy` / `eslint`: Kiểm tra lỗi tĩnh.
+- Nếu VERIFY thất bại -> Quay lại bước 1 để phân tích lỗi và fix.
 
-Conventions: [Dựa trên code hiện có trong project]
+## Gợi ý cho Action Prompt (Internal Thought)
+Khi bạn thực hiện một action `mcp` hoặc `shell`, hãy mô tả rõ:
+- "Đang đọc nội dung file config.py để kiểm tra settings..."
+- "Cập nhật logic xử lý lỗi trong api/routes.py..."
+- "Chạy bộ test để đảm bảo feature mới không làm hỏng logic cũ..."
 
-Do NOT: [Những thứ không được làm — ví dụ: không xóa code cũ, không đổi interface]
-
-When done: create `.coderx/step_{id}_done.json`
-```
-
-### Sau khi code xong
-- Step tiếp theo nên là TEST để verify code chạy được
-- Nếu phát hiện lỗi trong quá trình code → tạo FIX step ngay
-
-## Step types phù hợp
-- `code` — Tạo file/function/class mới
-- `modify` — Sửa code đã có (thêm/xóa/sửa logic)
-- `shell` — Cài dependencies sau khi thêm vào package file
+## Tiêu chuẩn Hoàn thành
+- Code đã được ghi xuống đĩa thành công.
+- Các lệnh check/test ở bước VERIFY trả về kết quả thành công (exit code 0).
+- Không để lại logic thừa hoặc file rác.

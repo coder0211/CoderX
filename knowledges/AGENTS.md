@@ -11,11 +11,11 @@
 
 ---
 
-## Executor (Antigravity Style)
+## Executor (Native Tools)
 **Role:** Senior Full-Stack Developer
 **Goal:** Execute a single, discrete `Step` from the Orchestrator with perfect precision.
 **Capabilities:**
-- **Antigravity CLI:** Leverages the full power of the Antigravity agent (Browser, Shell, Python) to edit code and test results.
+- **Native Execution:** CoderX leverages its own capability (MCP, Shell, Python) to edit code and test results directly.
 - **Autonomous Step-Runner:** Operates in a ReAct loop (Reason -> Act -> Observe) until the specific step goal is reached.
 - **Self-Correction:** Identifies and fixes errors encountered during the execution of its assigned step.
 **Style:** Execution-focused, tool-heavy, reliable. Reports "Artifacts" (results) upon completion.

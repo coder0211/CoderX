@@ -1,6 +1,6 @@
 """
 CoderX — Workspace File System Monitor
-Theo dõi file changes để phát hiện khi Antigravity Agent hoàn thành một step.
+Theo dõi file changes để phát hiện tiến trình thực thi.
 
 Completion detection priority:
   1. `.coderx/step_{id}_done.json` xuất hiện → DONE (agent signal)
@@ -67,7 +67,7 @@ class WorkspaceMonitor:
         progress_callback: Optional[Callable] = None,
     ) -> dict:
         """
-        Đợi Antigravity hoàn thành step.
+        Đợi tiến trình hoàn thành step.
         
         Returns dict với keys: status, summary, files_changed, elapsed
         status values:
@@ -144,7 +144,7 @@ class WorkspaceMonitor:
                 secs = int(elapsed % 60)
                 remain = int((timeout - elapsed) // 60)
                 await progress_callback(
-                    f"⌛ Antigravity vẫn đang chạy... {mins}:{secs:02d} "
+                    f"⌛ Tiến trình vẫn đang chạy... {mins}:{secs:02d} "
                     f"(tối đa {remain} phút nữa)"
                 )
 

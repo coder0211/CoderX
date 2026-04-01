@@ -21,11 +21,6 @@ class Config:
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o").strip("'\" ")
     OPENAI_BASE_URL: str | None = os.getenv("OPENAI_BASE_URL", None)
 
-    # Antigravity
-    ANTIGRAVITY_CLI: str = os.getenv(
-        "ANTIGRAVITY_CLI",
-        "/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity",
-    )
 
     # Workspace
     DEFAULT_WORKSPACE: str = os.getenv(
@@ -33,11 +28,6 @@ class Config:
         os.path.expanduser("~/Documents"),
     )
 
-    # Timeouts — Antigravity agent
-    # Không set timeout nhỏ: đợi Antigravity làm xong
-    # Nếu sau 15 phút chưa có done-marker → cancel + continue (không stuck)
-    STEP_TIMEOUT: int = int(os.getenv("STEP_TIMEOUT", "900"))       # 15 phút hard cancel
-    STEP_IDLE_TIMEOUT: int = int(os.getenv("STEP_IDLE_TIMEOUT", "60"))  # 60s không có file change
 
     # Autonomous Agent
     MAX_ITERATIONS: int = int(os.getenv("MAX_ITERATIONS", "15"))
@@ -65,8 +55,6 @@ class Config:
             errors.append("TELEGRAM_BOT_TOKEN is required")
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY is required")
-        if not os.path.exists(cls.ANTIGRAVITY_CLI):
-            errors.append(f"Antigravity CLI not found at: {cls.ANTIGRAVITY_CLI}")
         if errors:
             raise EnvironmentError("Config errors:\n" + "\n".join(f"  - {e}" for e in errors))
 

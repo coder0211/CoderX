@@ -1,6 +1,6 @@
 """
 CoderX — OpenClaw-Style Orchestrator
-High-level loop: Plan -> Review -> Delegate to AgentExecutor (Antigravity).
+High-level loop: Plan -> Review -> Delegate to AutonomousAgent.
 """
 import asyncio
 import time
@@ -101,7 +101,7 @@ class OpenClawOrchestrator:
 
                 await self._say(f"\n🚀 *Bắt đầu Bước {step.id}/{plan.total_steps}:* _{step.title}_", silent=True)
                 
-                # Gọi Antigravity Agent thực thi một step
+                # Gọi AutonomousAgent thực thi một step
                 agent = AutonomousAgent(notify=self.notify)
                 agent_state = await agent.run(step.prompt, workspace)
 

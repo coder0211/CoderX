@@ -38,7 +38,7 @@ NHẬN TASK TỪ ERIC
     │
     ▼
 [ACT] Thực thi bước tiếp theo:
-  - Gọi Antigravity Agent
+  - Gọi Action (MCP/Shell)
   - Hoặc chạy Shell command
   - Hoặc dùng MCP tool
     │

@@ -1,14 +1,14 @@
 """
 CoderX — Main Orchestration Pipeline
-Điều phối toàn bộ: ChatGPT Plan → Step Runner → Antigravity → Report
+Điều phối toàn bộ: ChatGPT Plan → Step Runner → Native Tools → Report
 """
 import asyncio
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from executor.antigravity import AntigravityExecutor
 from executor.shell import ShellExecutor
 from llm.planner import ExecutionPlan, Step, StepType, TaskPlanner
+from orchestrator.agent_loop import AutonomousAgent
 from workspace.monitor import WorkspaceMonitor
 from config import config
 
@@ -29,14 +29,13 @@ class Pipeline:
     """
     Pipeline thực thi một ExecutionPlan:
     - Chạy từng Step theo thứ tự (tôn trọng depends_on)
-    - Gọi Antigravity hoặc Shell tùy step type
+    - Gọi Native Tools hoặc Shell tùy step type
     - Monitor completion qua file changes
     - Gửi progress updates qua callback
     """
 
     def __init__(self, progress_callback: Optional[Callable] = None):
         self.planner = TaskPlanner()
-        self.antigravity = AntigravityExecutor()
         self.progress_callback = progress_callback
 
     async def _notify(self, message: str):
@@ -115,60 +114,33 @@ class Pipeline:
         if step.type == StepType.SHELL:
             return await self._run_shell_step(step, workspace)
         else:
-            return await self._run_antigravity_step(step, workspace, monitor)
+            return await self._run_native_step(step, workspace, monitor)
 
-    async def _run_antigravity_step(
+    async def _run_native_step(
         self,
         step: Step,
         workspace: str,
         monitor: WorkspaceMonitor,
     ) -> StepResult:
-        """Gọi Antigravity agent cho một coding step."""
-        success, msg = await self.antigravity.run(
-            prompt=step.prompt,
-            workspace=workspace,
-            mode="agent",
-        )
+        """Gọi native agent cho một coding/modify step."""
+        agent = AutonomousAgent(notify=self.progress_callback)
+        state = await agent.run(step.prompt, workspace)
 
-        if not success:
-            return StepResult(
-                step_id=step.id,
-                step_type=step.type,
-                title=step.title,
-                status="error",
-                summary=msg,
-            )
+        status = state.final_state.value
+        summary = state.final_summary
 
-        await self._notify(
-            f"  ⚡ Antigravity Agent đang chạy...\n"
-            f"  _(Đợi tối đa {config.STEP_TIMEOUT}s)_"
-        )
-
-        # Monitor completion
-        result = await monitor.wait_for_step_done(
-            step_id=step.id,
-            progress_callback=self._notify,
-        )
-
-        files_summary = ""
-        if result["files_changed"]:
-            top_files = result["files_changed"][:5]
-            files_summary = "\n  📁 " + "\n  📁 ".join(top_files)
-
-        await self._notify(
-            f"  ✅ *{step.title}* — {result['status']} "
-            f"({result['elapsed']:.0f}s)"
-            + (files_summary or "")
-        )
+        all_changed = set()
+        for it in state.iterations:
+            all_changed.update(it.observation.files_changed)
 
         return StepResult(
             step_id=step.id,
             step_type=step.type,
             title=step.title,
-            status=result["status"],
-            summary=result["summary"],
-            files_changed=result["files_changed"],
-            elapsed=result["elapsed"],
+            status=status,
+            summary=summary,
+            files_changed=list(all_changed),
+            elapsed=0.0, # Could calculate from iterations if needed
         )
 
     async def _run_shell_step(self, step: Step, workspace: str) -> StepResult:

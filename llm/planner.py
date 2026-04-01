@@ -1,6 +1,6 @@
 """
 CoderX — ChatGPT Task Planner
-"Tech Lead" — phân tích task, chia thành steps nhỏ cho Antigravity thực thi
+"Tech Lead" — phân tích task, chia thành steps nhỏ cho Native Agent thực thi
 """
 import json
 from dataclasses import dataclass, field
@@ -13,14 +13,18 @@ from config import config
 
 
 class StepType(str, Enum):
-    CODE = "code"         # Viết / tạo code mới
-    MODIFY = "modify"     # Sửa code hiện có
-    TEST = "test"         # Viết & chạy tests
-    FIX = "fix"           # Sửa bugs / lỗi
-    REVIEW = "review"     # Review & cải thiện code
-    REFACTOR = "refactor" # Tái cấu trúc code
-    DOCS = "docs"         # Viết documentation
-    SHELL = "shell"       # Chạy shell command (không dùng Antigravity)
+    CODE = "code"         # Create/implement code via MCP
+    CREATE = "create"
+    IMPLEMENT = "implement"
+    BUILD = "build"
+    MODIFY = "modify"     # Edit existing code via MCP
+    EDIT = "edit"
+    TEST = "test"         # Write/Run tests via Shell
+    FIX = "fix"           # Fix bugs via Shell/MCP
+    REVIEW = "review"     # Code analysis
+    REFACTOR = "refactor" # Code cleanup
+    DOCS = "docs"         # Documentation
+    SHELL = "shell"       # Native shell commands
 
 
 @dataclass
@@ -28,7 +32,7 @@ class Step:
     id: int
     type: StepType
     title: str                    # Mô tả ngắn gọn cho Telegram
-    prompt: str                   # Prompt đầy đủ gửi cho Antigravity
+    prompt: str                   # Hướng dẫn chi tiết cho bước này
     depends_on: list[int] = field(default_factory=list)
     shell_command: Optional[str] = None  # Nếu type == SHELL
     expected_files: list[str] = field(default_factory=list)  # Files dự kiến được tạo
@@ -51,16 +55,13 @@ Khi nhận yêu cầu từ người dùng, nhiệm vụ của bạn là:
 
 1. **Phân tích** yêu cầu kỹ thuật một cách toàn diện
 2. **Chia nhỏ** thành các bước (steps) độc lập, rõ ràng, có thứ tự hợp lý
-3. **Viết prompt chi tiết** cho từng step — Antigravity Agent sẽ đọc và thực hiện
+3. **Viết hướng dẫn chi tiết** cho từng step — CoderX sẽ tự thực hiện bằng công cụ MCP/Shell
 4. **Đảm bảo** có bước test và kiểm tra sau mỗi phần code quan trọng
 
 Quy tắc khi tạo steps:
-- Mỗi step phải đủ nhỏ để Antigravity thực hiện trong 1 lần gọi (5-15 phút)
 - Step type: code | modify | test | fix | review | refactor | docs | shell
-- Prompt phải TIẾNG ANH, rất cụ thể, bao gồm: context, yêu cầu, output mong đợi
-- Prompt phải kết thúc bằng: "When done, create `.coderx/step_{id}_done.json` with {\"status\": \"done\", \"summary\": \"what you did\", \"files_changed\": []}"
-- Steps type "shell" chỉ dùng cho: npm install, pip install, git operations, etc.
-- Luôn có ít nhất 1 step test (nếu task có code)
+- Prompt phải TIẾNG ANH, rõ ràng, bao gồm: mục tiêu, yêu cầu, các file liên quan
+- Luôn ưu tiên dùng `test` step để verify sau khi code.
 
 Trả về JSON theo format sau (chỉ JSON, không thêm text khác):
 {
@@ -177,16 +178,6 @@ class TaskPlanner:
         plan.total_steps = len(new_steps)
         return plan
 
-    def _parse_step(self, s: dict, fallback_id: int) -> Step:
-        prompt = s.get("prompt", "")
-        step_id = s.get("id", fallback_id)
-        if ".coderx/step_" not in prompt:
-            prompt += (
-                f'\n\nIMPORTANT: When you have completed all tasks above, '
-                f'create the file `.coderx/step_{step_id}_done.json` '
-                f'with content: {{"status": "done", "summary": "brief summary of what you did", '
-                f'"files_changed": ["list of files you created or modified"]}}'
-            )
         return Step(
             id=step_id,
             type=StepType(s.get("type", "code")),
@@ -234,17 +225,8 @@ class TaskPlanner:
     def _parse_plan(self, data: dict, default_workspace: str) -> ExecutionPlan:
         steps = []
         for s in data.get("steps", []):
-            # Inject done-marker instruction vào prompt nếu chưa có
             prompt = s.get("prompt", "")
             step_id = s.get("id", len(steps) + 1)
-            if ".coderx/step_" not in prompt:
-                prompt += (
-                    f'\n\nIMPORTANT: When you have completed all tasks above, '
-                    f'create the file `.coderx/step_{step_id}_done.json` '
-                    f'with content: {{"status": "done", "summary": "brief summary of what you did", '
-                    f'"files_changed": ["list of files you created or modified"]}}'
-                )
-
             steps.append(
                 Step(
                     id=step_id,

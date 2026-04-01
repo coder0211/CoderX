@@ -50,7 +50,6 @@ async def main():
     console.print(Panel.fit(
         "[bold cyan]🤖 CoderX[/bold cyan]\n"
         "[dim]Autonomous AI Developer Bot[/dim]\n\n"
-        f"[green]✓[/green] Antigravity CLI: [cyan]{config.ANTIGRAVITY_CLI}[/cyan]\n"
         f"[green]✓[/green] Default workspace: [cyan]{config.DEFAULT_WORKSPACE}[/cyan]\n"
         f"[green]✓[/green] OpenAI model: [cyan]{config.OPENAI_MODEL}[/cyan]\n"
         f"[green]✓[/green] OpenAI Key: [yellow]{mask_key(config.OPENAI_API_KEY)}[/yellow]\n"

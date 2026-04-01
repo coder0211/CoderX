@@ -9,8 +9,8 @@ Hướng dẫn CoderX tự động "khám phá" và hiểu kiến trúc của m�
 - Bot tự liệt kê file tree cấp 1-2.
 - Nhận diện các file "key" (README.md, package.json, requirements.txt, .env.example, Makefile, docker-compose.yml).
 
-### 2. Phân tích kiến trúc thông qua Antigravity
-Giao task cho Antigravity với prompt:
+### 2. Phân tích kiến trúc thông qua Native Tools
+Giao nhiệm vụ cho CoderX với prompt:
 ```
 Explore this repository and analyze:
 1. Main tech stack (Language, Frameworks, DB).
@@ -28,7 +28,7 @@ Write a comprehensive summary into `.coderx/onboarding.md`.
 - Khi user gửi lệnh `/onboard`.
 - Khi bot phát hiện workspace mới mà chưa có folder `.coderx/`.
 
-## Antigravity Agent Instructions for Onboard
+## Native Agent Instructions for Onboard
 - Sử dụng Terminal để `cat` các file config.
 - Sử dụng File tree để crawl folders.
 - Sử dụng Browser nếu cần tra cứu một config/framework lạ có trong project.

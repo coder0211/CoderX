@@ -82,7 +82,7 @@ Có tiếp tục không? Trả lời YES/NO
 ```
 Bot đợi tối đa 5 phút. Nếu không có trả lời → SKIP git step, báo cáo.
 
-## Khi tạo Git prompt cho Antigravity
+## Khi tạo Git prompt cho CoderX
 ```
 Git operations for this task:
 
