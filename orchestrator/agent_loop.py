@@ -5,6 +5,7 @@ Bot tự quyết định mọi thứ, không cần user confirm từng bước.
 """
 import asyncio
 import time
+import os
 from pathlib import Path
 from typing import Callable, Optional
 from orchestrator.logger import log, log_agent, console
@@ -67,8 +68,12 @@ class AutonomousAgent:
         self.live["phase"]       = "starting"
 
         # Log absolute path for transparency
-        abs_ws = Path(workspace).absolute()
+        abs_ws = os.path.abspath(os.path.expanduser(workspace))
         log(f"Working Workspace: [cyan]{abs_ws}[/cyan]", category="Workspace", style="bold yellow")
+        
+        bridge = get_mcp_bridge()
+        bridge.workspace_root = abs_ws
+        await bridge.startup()
 
         state = AgentState(task_goal=task_goal, workspace=workspace)
         self.memory = MemoryManager(workspace)

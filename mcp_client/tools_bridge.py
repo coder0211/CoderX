@@ -13,6 +13,7 @@ Tích hợp flow:
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from mcp_client.client import MCPClientManager
@@ -38,6 +39,7 @@ class MCPToolsBridge:
         self._registry = MCPRegistry()
         self._manager: MCPClientManager | None = None
         self._ready = False
+        self.workspace_root: str | None = None
 
     async def startup(self) -> None:
         """Kết nối tới tất cả MCP server được cấu hình."""
@@ -100,6 +102,24 @@ class MCPToolsBridge:
             return []
         return self._manager.list_all_tools()
 
+    def _is_safe_path(self, path: str) -> bool:
+        """Kiểm tra đường dẫn có nằm trong workspace_root không."""
+        if not self.workspace_root:
+            return True # Không có root thì cho phép (mặc định cho các task ngoài agent)
+            
+        root = os.path.abspath(self.workspace_root)
+        try:
+            # Resolve đường dẫn tuyệt đối
+            if not os.path.isabs(path):
+                # Giả định path tương đối so với root
+                target = os.path.abspath(os.path.join(root, path))
+            else:
+                target = os.path.abspath(path)
+                
+            return target.startswith(root)
+        except Exception:
+            return False
+
     async def execute(self, tool_name: str, arguments: dict[str, Any] | str) -> str:
         """
         Thực thi một MCP tool.
@@ -126,6 +146,15 @@ class MCPToolsBridge:
                 arguments = {}
 
         log(f"[MCP Bridge] Execute: {tool_name} | args: {arguments}", category="MCP", style="cyan")
+        
+        # Security Check: Nếu là tool filesystem, kiểm tra đường dẫn
+        if tool_name.startswith("filesystem/") and "path" in arguments:
+            path = arguments["path"]
+            if not self._is_safe_path(path):
+                msg = f"Security Error: Access denied. Path '{path}' is outside workspace root."
+                log(f"[MCP Bridge] ❌ {msg}", category="MCP", style="bold red")
+                return msg
+
         result = await self._manager.call_tool(tool_name, arguments)
         return result
 

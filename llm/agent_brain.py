@@ -187,6 +187,12 @@ Respond with JSON only. Field definitions:
 - **NO PLACEHOLDERS**: You are FORBIDDEN from using placeholders like `// ... rest of code`, `# existing functions`, etc. You MUST provide the full, functional code for any module you create or modify. Do not be lazy.
 - **Full Context**: Ensure all necessary imports and helper functions are included in the generated code.
 
+## Workspace Isolation & Security Rules:
+- **Jailbreak Restriction**: You are strictly confined to the workspace directory: `{state.workspace}`. 
+- **Relative Paths Only**: Always use paths relative to the root. DO NOT use absolute paths (starting with `/` or `~`) unless they are children of the workspace.
+- **No Breakouts**: Do not attempt to use `../` to access files above the workspace root. 
+- **CWD Awareness**: Your Current Working Directory (CWD) is ALWAYS the workspace root. Any command you run will execute from there.
+
 MCP Rules (type="mcp"):
 - Use MCP for all filesystem operations.
 - Set `mcp_tool` to "filesystem/read_file", "filesystem/write_file", etc.

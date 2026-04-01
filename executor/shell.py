@@ -24,9 +24,31 @@ class ShellExecutor:
         self.workspace = os.path.abspath(os.path.expanduser(workspace))
 
     def is_safe(self, command: str) -> bool:
-        """Check xem command có an toàn không."""
-        cmd = command.strip().lower()
-        return any(cmd.startswith(prefix) for prefix in self.ALLOWED_PREFIXES)
+        """
+        Check xem command có an toàn và nằm trong phạm vi workspace không.
+        Chặn tuyệt đối việc thoát khỏi root dự án qua '../' hoặc đường dẫn tuyệt đối.
+        """
+        cmd = command.strip()
+        cmd_lower = cmd.lower()
+        
+        # 1. Kiểm tra prefix hợp lệ
+        if not any(cmd_lower.startswith(prefix) for prefix in self.ALLOWED_PREFIXES):
+            return False
+            
+        # 2. Chặn thoát khỏi thư mục qua '..'
+        if ".." in cmd:
+            return False
+            
+        # 3. Chặn đường dẫn tuyệt đối (/) hoặc đường dẫn người dùng (~) 
+        # TRỪ KHI nó chính là workspace root (hiếm gặp nhưng cần cẩn thận)
+        parts = cmd.split()
+        for part in parts:
+            if part.startswith("/") or part.startswith("~"):
+                # Nếu là đường dẫn tuyệt đối, nó phải bắt đầu bằng path tới workspace
+                if not part.startswith(self.workspace):
+                    return False
+                    
+        return True
 
     async def run(
         self,
