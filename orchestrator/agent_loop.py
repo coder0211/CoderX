@@ -267,17 +267,19 @@ class AutonomousAgent:
         success, stdout, stderr = await shell.run(cmd)
 
         output = (stdout or stderr or "").strip()
-        truncated = output[:600]
+        # Keep more context for the LLM (4000 chars), but keep UI log clean (800 chars)
+        truncated_llm = output[:4000]
+        truncated_log = output[:800]
 
         if success:
-            await self._say(f"✅ Shell done\n```\n{truncated}\n```", silent=True)
+            await self._say(f"✅ Shell done\n```\n{truncated_log}\n```", silent=True)
         else:
-            await self._say(f"❌ Shell failed\n```\n{truncated}\n```", silent=True)
+            await self._say(f"❌ Shell failed\n```\n{truncated_log}\n```", silent=True)
 
         return Observation(
             action=action,
             status="done" if success else "error",
-            summary=truncated,
+            summary=truncated_llm,
             shell_output=output,
         )
 
@@ -312,9 +314,11 @@ class AutonomousAgent:
                 self.mcp.execute(tool_name, arguments),
                 timeout=config.MCP_TOOL_TIMEOUT,
             )
-            truncated = result[:800]
-            await self._say(f"✅ MCP OK\n```\n{truncated}\n```", silent=True)
-            return Observation(action=action, status="done", summary=truncated)
+            # Keep more context for the LLM (4000 chars), but keep UI log clean (800 chars)
+            truncated_llm = result[:4000]
+            truncated_log = result[:800]
+            await self._say(f"✅ MCP OK\n```\n{truncated_log}\n```", silent=True)
+            return Observation(action=action, status="done", summary=truncated_llm)
 
         except asyncio.TimeoutError:
             msg = f"MCP tool '{tool_name}' timed out after {config.MCP_TOOL_TIMEOUT}s"

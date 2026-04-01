@@ -82,9 +82,10 @@ class AgentState:
         lines = []
         for it in self.iterations[-3:]:  # Limit to last 3 to save tokens
             obs = it.observation
+            # Keep more context in history summary (1000 chars)
             lines.append(
                 f"[Iter {it.iteration}] {it.action.type.upper()}: {it.action.title}\n"
-                f"  → Result: {obs.status} | {obs.summary[:200]}\n"
+                f"  → Result: {obs.status} | {obs.summary[:1000]}\n"
                 f"  → Files changed: {', '.join(obs.files_changed[:5]) or 'none'}\n"
                 f"  → Next State: {it.next_state} (confidence: {it.confidence}%)"
             )
@@ -233,19 +234,25 @@ def _load_agents() -> str:
     return ""
 
 
-def _load_skills() -> str:
-    """Load tất cả skills từ knowledges/skills/ để inject vào system prompt."""
-    skills_dir = Path(__file__).parent.parent / "knowledges" / "skills"
-    if not skills_dir.exists():
-        return ""
-
-    skill_texts = []
-    for skill_file in sorted(skills_dir.glob("*.md")):
-        content = skill_file.read_text().strip()
-        skill_name = skill_file.stem.upper()
-        skill_texts.append(f"### Skill: {skill_name}\n{content}")
-
     return "\n\n---\n\n".join(skill_texts) if skill_texts else ""
+
+
+def safe_json_loads(text: str) -> dict:
+    """Xử lý JSON an toàn hơn, loại bỏ markdown backticks nếu có."""
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        import re
+        text = re.sub(r',\s*([\]}])', r'\1', text)
+        return json.loads(text)
 
 
 # ─── Agent Brain ──────────────────────────────────────────────────────────────
@@ -323,7 +330,7 @@ class AgentBrain:
         raw = response.choices[0].message.content
         self._messages.append({"role": "assistant", "content": raw})
 
-        data = json.loads(raw)
+        data = safe_json_loads(raw)
         action_data = data.get("action", {})
         
         raw_action_type = action_data.get("type", "mcp")

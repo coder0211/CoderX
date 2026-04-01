@@ -65,6 +65,7 @@ Khi nhận yêu cầu từ người dùng, nhiệm vụ của bạn là:
 
 Quy tắc:
 - Step type: code | modify | test | fix | review | refactor | docs | shell
+- **BẮT BUỘC**: Mỗi step phải có ID duy nhất (tăng dần từ 1) và Title mô tả ngắn gọn.
 - Luôn ưu tiên dùng `test` step để verify.
 - Trả về JSON format (không thêm text khác).
 
@@ -72,8 +73,34 @@ Quy tắc:
   "strategy_analysis": "Phân tích Pro/Con về UX và Architecture của yêu cầu này (Tiếng Việt)",
   "task_summary": "Mô tả ngắn gọn task",
   "workspace": "...",
-  "steps": [...]
+  "steps": [
+    {
+      "id": 1,
+      "type": "code",
+      "title": "Tên bước",
+      "prompt": "Hướng dẫn chi tiết..."
+    }
+  ]
 }"""
+
+
+def safe_json_loads(text: str) -> dict:
+    """Xử lý JSON an toàn hơn, loại bỏ markdown backticks nếu có."""
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Thử sửa lỗi dấu phẩy thừa (trailing commas) nếu cần
+        import re
+        text = re.sub(r',\s*([\]}])', r'\1', text)
+        return json.loads(text)
 
 
 class TaskPlanner:
@@ -125,7 +152,7 @@ class TaskPlanner:
         raw = response.choices[0].message.content
         self.conversation_history.append({"role": "assistant", "content": raw})
 
-        plan_data = json.loads(raw)
+        plan_data = safe_json_loads(raw)
         return self._parse_plan(plan_data, workspace)
 
     def _load_memory(self, workspace: str) -> str:
@@ -168,7 +195,7 @@ class TaskPlanner:
             self.conversation_history = [self.conversation_history[0]] + self.conversation_history[-4:]
 
         raw = response.choices[0].message.content
-        data = json.loads(raw)
+        data = safe_json_loads(raw)
         
         # Merge các bước mới vào plan hiện tại
         new_steps_data = data.get("steps", [])
@@ -235,9 +262,14 @@ class TaskPlanner:
         return response.choices[0].message.content
 
     def _parse_plan(self, data: dict, default_workspace: str) -> ExecutionPlan:
+        steps_data = data.get("steps", [])
         steps = []
-        for s in data.get("steps", []):
-            steps.append(self._parse_step(s))
+        for i, s_data in enumerate(steps_data):
+            step = self._parse_step(s_data)
+            # Auto-fix IDs if missing or zero (ensure sequence starts at 1)
+            if step.id == 0:
+                step.id = i + 1
+            steps.append(step)
 
         workspace = data.get("workspace") or default_workspace
         return ExecutionPlan(
