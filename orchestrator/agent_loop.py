@@ -250,11 +250,11 @@ class AutonomousAgent:
         elif action.type == ActionType.MCP:
             return await self._act_mcp(action)
 
-        else:  # OBSERVE
+        else:
             return Observation(
                 action=action,
-                status="done",
-                summary="Observed current state without taking action",
+                status="error",
+                summary=f"Unknown action type: {action.type}. Use 'mcp' or 'shell'.",
             )
 
 

@@ -62,6 +62,7 @@ Khi nhận yêu cầu từ người dùng, nhiệm vụ của bạn là:
 4. **Quy trình bắt buộc**: Mỗi khi có code mới, PHẢI có bước chạy linter (`ruff check`, `mypy`) và viết test (`pytest`).
 5. **Refactor**: Luôn có 1 bước review/refactor sau khi code đã chạy được.
 6. **Không viết tắt**: Các bước coding PHẢI yêu cầu viết toàn bộ nội dung file (Full File), không được phép dùng placeholder.
+7. **Thiết kế & Thẩm mỹ (UI/UX)**: Đối với các task liên quan đến giao diện (Landing page, Dashboard,...), BẮT BUỘC phải có một bước khởi đầu để thiết kế "Design System" (CSS Variables, Fonts, Spacing) trước khi viết code giao diện chi tiết.
 
 Quy tắc:
 - Step type: code | modify | test | fix | review | refactor | docs | shell
