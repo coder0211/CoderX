@@ -44,40 +44,32 @@ class ExecutionPlan:
     task_summary: str
     workspace: str
     steps: list[Step]
+    strategy_analysis: str = ""
     total_steps: int = 0
 
     def __post_init__(self):
         self.total_steps = len(self.steps)
 
 
-SYSTEM_PROMPT = """Bạn là một Senior Software Architect kiêm Tech Lead.
+SYSTEM_PROMPT = """Bạn là một Senior Software Architect kiêm Tech Lead & Product Manager.
 Khi nhận yêu cầu từ người dùng, nhiệm vụ của bạn là:
 
-1. **Phân tích** yêu cầu kỹ thuật một cách toàn diện
-2. **Chia nhỏ** thành các bước (steps) độc lập, rõ ràng, có thứ tự hợp lý
-3. **Viết hướng dẫn chi tiết** cho từng step — CoderX sẽ tự thực hiện bằng công cụ MCP/Shell
-4. **Đảm bảo** có bước test và kiểm tra sau mỗi phần code quan trọng
+1. **Phân tích Chiến lược (Strategy Analysis)**: Đánh giá yêu cầu về mặt UX và Kiến trúc. 
+   - Nếu yêu cầu làm UI quá phức tạp -> Đề xuất phương án tối giản.
+   - Nếu yêu cầu về tech gây lãng phí/over-engineering -> Đề xuất giải pháp bền vững.
+2. **Chia nhỏ** thành các bước (steps) độc lập, rõ ràng.
+3. **Viết hướng dẫn chi tiết** cho từng step.
 
-Quy tắc khi tạo steps:
+Quy tắc:
 - Step type: code | modify | test | fix | review | refactor | docs | shell
-- Prompt phải TIẾNG ANH, rõ ràng, bao gồm: mục tiêu, yêu cầu, các file liên quan
-- Luôn ưu tiên dùng `test` step để verify sau khi code.
+- Luôn ưu tiên dùng `test` step để verify.
+- Trả về JSON format (không thêm text khác).
 
-Trả về JSON theo format sau (chỉ JSON, không thêm text khác):
 {
-  "task_summary": "Mô tả ngắn gọn task bằng tiếng Việt",
-  "workspace": "path/to/workspace hoặc để trống nếu dùng default",
-  "steps": [
-    {
-      "id": 1,
-      "type": "code",
-      "title": "Tạo cấu trúc project",
-      "prompt": "Create the project structure for...",
-      "depends_on": [],
-      "shell_command": null,
-      "expected_files": ["src/main.py", "requirements.txt"]
-    }
-  ]
+  "strategy_analysis": "Phân tích Pro/Con về UX và Architecture của yêu cầu này (Tiếng Việt)",
+  "task_summary": "Mô tả ngắn gọn task",
+  "workspace": "...",
+  "steps": [...]
 }"""
 
 
@@ -104,11 +96,15 @@ class TaskPlanner:
         """
         Phân tích yêu cầu và tạo execution plan với các steps nhỏ.
         """
+        # Load memory automatically if not provided
+        if not context:
+            context = self._load_memory(workspace)
+
         system_prompt = f"{self._agents}\n\n{SYSTEM_PROMPT}\n\n## Your Current Persona: Orchestrator (OpenClaw Style)\nYou are currently acting as the **Orchestrator**. Your goal is to map out the strategy for the team."
         
         user_content = f"Workspace hiện tại: {workspace}\n\n"
         if context:
-            user_content += f"Context bổ sung:\n{context}\n\n"
+            user_content += f"Context (Long-Term Memory):\n{context}\n\n"
         user_content += f"Yêu cầu: {user_request}"
 
         self.conversation_history.append({"role": "user", "content": user_content})
@@ -128,6 +124,13 @@ class TaskPlanner:
 
         plan_data = json.loads(raw)
         return self._parse_plan(plan_data, workspace)
+
+    def _load_memory(self, workspace: str) -> str:
+        from pathlib import Path
+        memory_path = Path(workspace) / ".coderx" / "MEMORY.md"
+        if memory_path.exists():
+            return memory_path.read_text(encoding="utf-8")
+        return ""
 
     async def review_and_refine(
         self,
@@ -172,17 +175,18 @@ class TaskPlanner:
         for s_data in new_steps_data:
             s_id = s_data.get("id")
             if s_id > latest_result['id']:
-                new_steps.append(self._parse_step(s_data, len(new_steps) + 1))
+                new_steps.append(self._parse_step(s_data))
         
         plan.steps = new_steps
         plan.total_steps = len(new_steps)
         return plan
 
+    def _parse_step(self, s: dict) -> Step:
         return Step(
-            id=step_id,
+            id=s.get("id", 0),
             type=StepType(s.get("type", "code")),
-            title=s.get("title", f"Step {step_id}"),
-            prompt=prompt,
+            title=s.get("title", f"Step"),
+            prompt=s.get("prompt", ""),
             depends_on=s.get("depends_on", []),
             shell_command=s.get("shell_command"),
             expected_files=s.get("expected_files", []),
@@ -225,23 +229,12 @@ class TaskPlanner:
     def _parse_plan(self, data: dict, default_workspace: str) -> ExecutionPlan:
         steps = []
         for s in data.get("steps", []):
-            prompt = s.get("prompt", "")
-            step_id = s.get("id", len(steps) + 1)
-            steps.append(
-                Step(
-                    id=step_id,
-                    type=StepType(s.get("type", "code")),
-                    title=s.get("title", f"Step {step_id}"),
-                    prompt=prompt,
-                    depends_on=s.get("depends_on", []),
-                    shell_command=s.get("shell_command"),
-                    expected_files=s.get("expected_files", []),
-                )
-            )
+            steps.append(self._parse_step(s))
 
         workspace = data.get("workspace") or default_workspace
         return ExecutionPlan(
             task_summary=data.get("task_summary", ""),
             workspace=workspace,
             steps=steps,
+            strategy_analysis=data.get("strategy_analysis", ""),
         )

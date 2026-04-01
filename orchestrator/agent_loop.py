@@ -15,6 +15,7 @@ from llm.agent_brain import (
     AgentState, WorkflowState, Observation,
 )
 from mcp_client.tools_bridge import get_mcp_bridge
+from orchestrator.memory_manager import MemoryManager
 from workspace.monitor import WorkspaceMonitor
 from config import config
 
@@ -47,6 +48,7 @@ class AutonomousAgent:
             "task_goal": "",
             "last_log": "",        # Bản tin log mới nhất gửi qua notify
         }
+        self.memory: Optional[MemoryManager] = None
 
     async def _say(self, msg: str, silent: bool = True):
         """Log ra terminal, và tùy chọn gửi qua Telegram."""
@@ -69,6 +71,8 @@ class AutonomousAgent:
         log(f"Working Workspace: [cyan]{abs_ws}[/cyan]", category="Workspace", style="bold yellow")
 
         state = AgentState(task_goal=task_goal, workspace=workspace)
+        self.memory = MemoryManager(workspace)
+        
         monitor = WorkspaceMonitor(workspace)
         monitor.start()
 
@@ -157,6 +161,16 @@ class AutonomousAgent:
                 # ── Record iteration ──────────────────────────────────────────
                 self.live["phase"]       = "observing"
                 self.live["last_result"] = observation.summary[:200]
+                
+                # Nếu confidence cao hoặc iteration định kỳ, lưu lại vào memory
+                if confidence > 90 or iteration % 5 == 0:
+                     self.memory.append_decision(
+                         iteration, 
+                         f"Mid-step Pivot/Decision: {action.title}", 
+                         "learning", 
+                         f"Thought: {action.reasoning}\nResult: {observation.summary[:500]}"
+                     )
+
                 agent_iter = AgentIteration(
                     iteration=iteration,
                     action=action,

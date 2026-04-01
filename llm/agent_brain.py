@@ -27,6 +27,8 @@ class WorkflowState(str, Enum):
     CODING = "coding"                 # Đang viết code/thực thi lệnh
     VERIFYING = "verifying"           # Kiểm thử, đọc lại kết quả
     AWAITING_REVIEW = "awaiting_review" # Chờ xác nhận từ người dùng
+    ARCH_REVIEW = "arch_review"       # Xem xét lại kiến trúc
+    PRODUCT_REVIEW = "product_review" # Xem xét lại UX/UI
     COMPLETED = "completed"           # Hoàn thành
     FAILED = "failed"                 # Thất bại/Bó tay
 
@@ -143,19 +145,21 @@ Iteration: {iteration} / {config.MAX_ITERATIONS}
 ## Your Task Now
 Based on the mission, workspace state, and history above:
 1. REASON: Analyze the current state. What is missing? What errors occurred?
-2. PLAN: Formulate the next atomic step to move closer to the goal.
-3. ACT: Execute the step using a single action (MCP or Shell).
-4. NEXT STATE: Should you move to 'coding', 'verifying', 'awaiting_review', or are you 'completed'?
+2. STRATEGIZE: Does the current path align with **Product & Architecture** principles in SOUL.md?
+   - If you see a better UX or simpler architecture, **Push Back** by suggesting it in your reasoning and setting `next_state` to `product_review` or `arch_review`.
+3. PLAN: Formulate the next atomic step to move closer to the goal.
+4. ACT: Execute the step using a single action (MCP or Shell).
+5. NEXT STATE: Should you move to 'coding', 'verifying', 'arch_review', 'product_review', 'awaiting_review', or are you 'completed'?
 
 Respond with JSON only. Field definitions:
-- `next_state`: MUST be one of exactly: "planning", "coding", "verifying", "awaiting_review", "completed", "failed".
+- `next_state`: MUST be one of exactly: "planning", "coding", "verifying", "arch_review", "product_review", "awaiting_review", "completed", "failed".
 - `action.type`: MUST be one of exactly: "shell", "observe", "mcp".
 
 {{
-  "reasoning": "Your analysis of current state and what needs to be done",
-  "next_state": "planning | coding | verifying | awaiting_review | completed | failed",
+  "reasoning": "Your analysis. Use this to provide architectural or UX feedback if needed.",
+  "next_state": "planning | coding | verifying | arch_review | product_review | awaiting_review | completed | failed",
   "confidence": 0-100,
-  "decision_reason": "Why you made this decision",
+  "decision_reason": "Why you made this decision (Vietnamese OK)",
   "action": {{
     "type": "shell | observe | mcp",
     "title": "Short title for this action (Vietnamese OK)",

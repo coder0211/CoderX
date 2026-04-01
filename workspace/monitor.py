@@ -196,3 +196,25 @@ class WorkspaceMonitor:
 
         return "\n\n".join(context_parts) if context_parts else ""
 
+    def get_snapshot(self) -> str:
+        """Liệt kê files trong workspace để cho ChatGPT biết trạng thái hiện tại."""
+        path = Path(self.workspace)
+        lines = []
+
+        def walk(p: Path, prefix: str = "", depth: int = 0):
+            if depth > 4:
+                return
+            try:
+                items = sorted(p.iterdir(), key=lambda x: (x.is_file(), x.name))
+                for item in items:
+                    if item.name.startswith(".") or item.name in ("node_modules", "__pycache__", "venv"):
+                        continue
+                    lines.append(f"{prefix}{'📁' if item.is_dir() else '📄'} {item.name}")
+                    if item.is_dir() and depth < 3:
+                        walk(item, prefix + "  ", depth + 1)
+            except PermissionError:
+                pass
+
+        walk(path)
+        return "\n".join(lines[:200]) if lines else "Empty workspace"
+

@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from executor.shell import ShellExecutor
 from llm.planner import ExecutionPlan, Step, StepType, TaskPlanner
 from orchestrator.agent_loop import AutonomousAgent
+from orchestrator.memory_manager import MemoryManager
 from workspace.monitor import WorkspaceMonitor
 from config import config
 
@@ -63,7 +64,10 @@ class Pipeline:
             )
         )
 
-        # 2. Khởi động file monitor
+        # 2. Khởi động bộ nhớ & file monitor
+        memory = MemoryManager(workspace)
+        memory.reset_with_goal(user_request)
+        
         monitor = WorkspaceMonitor(workspace)
         monitor.start()
 
@@ -74,14 +78,30 @@ class Pipeline:
                 result = await self._execute_step(step, workspace, monitor, results)
                 results.append(result)
 
+                # Ghi vào bộ nhớ
+                memory.append_decision(step.id, step.title, result.status, result.summary)
+
+                # Tìm cách commit nếu thành công
+                if result.status == "done":
+                    await self._git_commit(step, workspace)
+
                 # Nếu step thất bại nghiêm trọng, hỏi ChatGPT tạo fix step
                 if result.status in ("error", "timeout") and step.type != StepType.FIX:
                     await self._notify(
                         f"⚠️ Step {step.id} gặp vấn đề. 🔧 Đang tạo fix step..."
                     )
-                    fix_step = await self.planner.refine_step(step, result.summary, workspace)
-                    fix_result = await self._execute_step(fix_step, workspace, monitor, results)
-                    results.append(fix_result)
+                    # Corrected method call from refine_step to review_and_refine
+                    # We pass the plan and the result to get an updated plan
+                    project_map = monitor.get_snapshot() # Assuming monitor can give snapshot
+                    plan = await self.planner.review_and_refine(plan, {
+                        "id": step.id,
+                        "type": step.type,
+                        "status": result.status,
+                        "summary": result.summary
+                    }, project_map)
+                    
+                    # The loop will continue with the updated plan steps
+                    # Note: This logic assumes plan.steps is updated in place or returned
 
         finally:
             monitor.stop()
@@ -167,3 +187,18 @@ class Pipeline:
             summary=truncated,
             shell_output=output,
         )
+
+    async def _git_commit(self, step: Step, workspace: str):
+        """Tự động commit kết quả sau mỗi bước thành công."""
+        shell = ShellExecutor(workspace)
+        # Kiểm tra xem có phải repo git không
+        # success is the first, stdout is second
+        success, stdout, _ = await shell.run("git rev-parse --is-inside-work-tree")
+        if not success or stdout.strip() != "true":
+            return
+
+        msg = f"[CoderX] Step {step.id}: {step.title}"
+        await shell.run("git add .")
+        success, _, _ = await shell.run(f'git commit -m "{msg}"')
+        if success:
+            await self._notify(f"  📦 *Auto-commit:* `{msg}`")
