@@ -30,7 +30,7 @@ class Config:
 
 
     # Autonomous Agent
-    MAX_ITERATIONS: int = int(os.getenv("MAX_ITERATIONS", "15"))
+    MAX_ITERATIONS: int = int(os.getenv("MAX_ITERATIONS", "999"))
 
     # Task Queue
     MAX_QUEUE_SIZE: int = int(os.getenv("MAX_QUEUE_SIZE", "10"))

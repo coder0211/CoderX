@@ -80,7 +80,7 @@ class AgentState:
             return "No actions taken yet."
 
         lines = []
-        for it in self.iterations[-5:]:  # Only last 5 to avoid token overflow
+        for it in self.iterations[-3:]:  # Limit to last 3 to save tokens
             obs = it.observation
             lines.append(
                 f"[Iter {it.iteration}] {it.action.type.upper()}: {it.action.title}\n"
@@ -264,6 +264,14 @@ class AgentBrain:
         else:
             # Update system with latest state
             self._messages[0] = {"role": "system", "content": system_prompt}
+
+        # Truncate messages if they exceed 10 to save context costs
+        # Keep index 0 (system) and index 1 (initial goal)
+        if len(self._messages) > 10:
+            system_msg = self._messages[0]
+            initial_user = self._messages[1]
+            # Keep the last 6 messages (3 turns of user/assistant)
+            self._messages = [system_msg, initial_user] + self._messages[-6:]
 
         # Add observation from last iteration
         if state.iterations:

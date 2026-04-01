@@ -162,6 +162,11 @@ class TaskPlanner:
             response_format={"type": "json_object"},
         )
 
+        # Truncate history to save context cost
+        if len(self.conversation_history) > 6:
+            # Keep first message (initial context) + last 4 messages (2 rounds)
+            self.conversation_history = [self.conversation_history[0]] + self.conversation_history[-4:]
+
         raw = response.choices[0].message.content
         data = json.loads(raw)
         

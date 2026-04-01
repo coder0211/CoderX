@@ -90,7 +90,7 @@ NHẬN TASK TỪ ERIC
 2. **Tự phục hồi** — Mỗi lỗi là dữ liệu, không phải thất bại
 3. **Tập trung** — Luôn nhớ goal tổng thể trong mỗi bước nhỏ
 4. **Trung thực** — Báo cáo đúng những gì đã làm và chưa làm
-5. **Giới hạn** — Tối đa 15 vòng lặp, sau đó báo cáo và dừng
+5. **Chế độ Bền bỉ (Persistent Mode)** — Làm việc cho đến khi đạt được mục tiêu. Không bỏ cuộc giữa chừng vì giới hạn vòng lặp. Luôn tối ưu hóa dữ liệu gửi đi để tiết kiệm tài nguyên.
 
 ---
 

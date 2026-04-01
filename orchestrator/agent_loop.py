@@ -87,10 +87,10 @@ class AutonomousAgent:
             )
 
         await self._say(
-            f"🔥 *Tiến trình chạy ngầm bắt đầu*\n"
+            f"🔥 *Tiến trình chạy ngầm bắt đầu (Chế độ Bền bỉ)*\n"
             f"🎯 Mục tiêu: _{task_goal}_\n"
             f"📁 Workspace: `{workspace}`\n"
-            f"_(Em sẽ tự bơi trong tối đa {config.MAX_ITERATIONS} bước nhé!)_",
+            f"_(Em sẽ tự bơi cho đến khi xong, tối đa {config.MAX_ITERATIONS} bước nhé!)_",
             silent=True
         )
 
