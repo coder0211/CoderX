@@ -12,6 +12,7 @@ from llm.planner import TaskPlanner, ExecutionPlan, Step
 from orchestrator.agent_loop import AutonomousAgent
 from orchestrator.logger import log_orchestrator, log_queue
 from orchestrator.memory_manager import MemoryManager
+from orchestrator.plan_manager import PlanManager
 
 class OpenClawOrchestrator:
     """
@@ -80,16 +81,20 @@ class OpenClawOrchestrator:
         try:
             # 0. Khởi tạo Project Map (OpenClaw signature feature)
             project_map = self._update_project_map(workspace)
+            plan_manager = PlanManager(workspace)
 
             # 1. Lập kế hoạch (OpenClaw style)
             await self._say("📝 *Đang phân tích dự án và lập kế hoạch tổng thể...*", silent=True)
             plan = await self.planner.plan(task_goal, workspace, context=f"PROJECT MAP:\n{project_map}")
             self.current_plan = plan
 
-            # Thông báo kế hoạch cho user
-            plan_desc = "\n".join([f"{s.id}. {s.title}" for s in plan.steps])
+            # Ghi các bản thiết kế xuống file workspace để User dễ theo dõi
+            plan_manager.write_implementation_strategy(plan.strategy_analysis)
+            plan_manager.initialize_plan(plan)
+
             await self._say(
                 f"📋 *Lộ trình thực hiện:*\n{plan_desc}\n\n"
+                f"💡 _Anh có thể xem bản thiết kế chi tiết tại `.coderx/IMPLEMENTATION_PLAN.md` và theo dõi Roadmap tại `.coderx/PLAN.md`._\n\n"
                 f"_(Em bắt đầu bước 1 ngay đây anh nhé!)_",
                 silent=True
             )
@@ -119,6 +124,9 @@ class OpenClawOrchestrator:
                 
                 # Ghi lịch sử bước vào MEMORY.md (OpenClaw Bridge)
                 memory.append_decision(step.id, step.title, status, summary)
+                
+                # Cập nhật trạng thái trong PLAN.md
+                plan_manager.update_step_status(step.id, status, summary)
                 
                 # Cập nhật context & Project Map sau mỗi bước
                 project_map = self._update_project_map(workspace)
