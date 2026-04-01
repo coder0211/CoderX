@@ -90,6 +90,7 @@ class AntigravityExecutor:
         workspace: str,
         mode: str = "agent",
         context_files: list[str] = None,
+        step_id: int | None = None,
     ) -> tuple[bool, str]:
         """
         Gọi Antigravity chat với prompt và context files.
@@ -99,6 +100,7 @@ class AntigravityExecutor:
             workspace: Đường dẫn workspace
             mode: 'agent' | 'ask' | 'edit'
             context_files: Danh sách các file đính kèm (relative paths)
+            step_id: ID bước hiện tại — dùng để inject done-marker instruction vào prompt
 
         Returns:
             (success, message)
@@ -115,6 +117,22 @@ class AntigravityExecutor:
 
         await self.ensure_open(workspace)
 
+        # Inject done-marker instruction vào cuối prompt nếu có step_id
+        # Đây là cơ chế duy nhất để agent_loop.py biết Antigravity đã xong
+        final_prompt = prompt
+        if step_id is not None:
+            done_marker = (
+                f"\n\n---\n"
+                f"CRITICAL INSTRUCTION: When you have fully completed ALL tasks above, "
+                f"you MUST create the file `.coderx/step_{step_id}_done.json` "
+                f"in the workspace root with this exact content:\n"
+                f'{{"status": "done", "summary": "brief summary of what you accomplished", '
+                f'"files_changed": ["list", "of", "files", "you", "modified"]}}\n'
+                f"This file is how the orchestrator knows you are finished. Do NOT skip this step."
+            )
+            if f".coderx/step_{step_id}_done.json" not in final_prompt:
+                final_prompt = prompt + done_marker
+
         cmd = [
             self.cli,
             "chat",
@@ -128,33 +146,43 @@ class AntigravityExecutor:
             for f in context_files:
                 cmd.extend(["--add-file", f])
 
-        cmd.append(prompt)
+        cmd.append("-")  # Dùng STDIN để an toàn với prompt dài/multiline
 
         try:
             log(f"Executing chat command in [cyan]{workspace}[/cyan] ...", category="Executor")
+            if step_id is not None:
+                log(f"Step ID: [yellow]{step_id}[/yellow] — done marker injected into prompt", category="Executor")
+
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=workspace,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            
-            # CLI return ngay sau khi mở chat GUI
-            # Nhưng ta vẫn communicate để xem có lỗi tức thì không
+
+            # CLI của Antigravity (VS Code-based GUI) thường thoát ngay sau khi
+            # route prompt vào panel. Ta dùng timeout ngắn để bắt lỗi tức thì.
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=10, 
+                    proc.communicate(input=final_prompt.encode('utf-8')),
+                    timeout=10,
                 )
-                output = stdout.decode() if stdout else (stderr.decode() if stderr else "")
-                
-                if proc.returncode != 0 and proc.returncode is not None:
+                stdout_text = stdout.decode('utf-8').strip() if stdout else ""
+                stderr_text = stderr.decode('utf-8').strip() if stderr else ""
+                output = stdout_text or stderr_text or "Prompt delivered to Antigravity GUI"
+
+                if proc.returncode not in (None, 0):
                     return False, f"CLI Error (code {proc.returncode}): {output}"
-                
+
+                log(f"Prompt delivered ✓ ({len(final_prompt)} chars)", category="Executor", style="green")
                 return True, output
+
             except asyncio.TimeoutError:
-                # Đây là trường hợp bình thường nếu CLI không chịu thoát (tùy version)
-                return True, "Chat opened (timeout waiting for CLI exit)"
+                # Bình thường — CLI đang giữ stdin open, prompt đã được route vào GUI
+                proc.stdin.close()  # Đóng stdin để CLI thoát
+                log("CLI still running (GUI mode) — prompt was sent", category="Executor", style="dim")
+                return True, "Prompt delivered to Antigravity (GUI session active)"
 
         except Exception as e:
             log(f"Error calling Antigravity: {e}", category="Executor", style="bold red")

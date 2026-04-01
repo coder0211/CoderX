@@ -11,6 +11,7 @@ from typing import Callable, Optional, List
 from llm.planner import TaskPlanner, ExecutionPlan, Step
 from orchestrator.agent_loop import AutonomousAgent
 from orchestrator.logger import log_orchestrator, log_queue
+from orchestrator.memory_manager import MemoryManager
 
 class OpenClawOrchestrator:
     """
@@ -71,12 +72,17 @@ class OpenClawOrchestrator:
         Luồng chính: Lập kế hoạch -> Thực thi từng bước -> Báo cáo.
         """
         self._running = True
+        
+        # OpenClaw Memory Bridge Init
+        memory = MemoryManager(workspace)
+        memory.reset_with_goal(task_goal)
+
         try:
             # 0. Khởi tạo Project Map (OpenClaw signature feature)
             project_map = self._update_project_map(workspace)
 
             # 1. Lập kế hoạch (OpenClaw style)
-            await self._say("📝 *Đang phân tích dự án và lập kế hoạch tổng thể...*", silent=False)
+            await self._say("📝 *Đang phân tích dự án và lập kế hoạch tổng thể...*", silent=True)
             plan = await self.planner.plan(task_goal, workspace, context=f"PROJECT MAP:\n{project_map}")
             self.current_plan = plan
 
@@ -85,7 +91,7 @@ class OpenClawOrchestrator:
             await self._say(
                 f"📋 *Lộ trình thực hiện:*\n{plan_desc}\n\n"
                 f"_(Em bắt đầu bước 1 ngay đây anh nhé!)_",
-                silent=False
+                silent=True
             )
 
             # 2. Thực thi từng bước
@@ -93,7 +99,7 @@ class OpenClawOrchestrator:
                 if not self._running:
                     break
 
-                await self._say(f"\n🚀 *Bắt đầu Bước {step.id}/{plan.total_steps}:* _{step.title}_", silent=False)
+                await self._say(f"\n🚀 *Bắt đầu Bước {step.id}/{plan.total_steps}:* _{step.title}_", silent=True)
                 
                 # Gọi Antigravity Agent thực thi một step
                 agent = AutonomousAgent(notify=self.notify)
@@ -110,6 +116,9 @@ class OpenClawOrchestrator:
                     "summary": summary
                 }
                 self.step_results.append(result)
+                
+                # Ghi lịch sử bước vào MEMORY.md (OpenClaw Bridge)
+                memory.append_decision(step.id, step.title, status, summary)
                 
                 # Cập nhật context & Project Map sau mỗi bước
                 project_map = self._update_project_map(workspace)

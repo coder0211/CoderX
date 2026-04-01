@@ -270,11 +270,18 @@ class AutonomousAgent:
             silent=True
         )
 
+        # OpenClaw Memory Bridge Injection
+        memory_file = str(Path(workspace) / ".coderx" / "MEMORY.md")
+        context_files = list(action.relevant_files) if action.relevant_files else []
+        if memory_file not in context_files and Path(memory_file).exists():
+            context_files.insert(0, memory_file)
+
         success, msg = await self.antigravity.run(
             prompt=action.prompt,
             workspace=workspace,
             mode=mode,
-            context_files=action.relevant_files,
+            context_files=context_files,
+            step_id=iteration,
         )
 
         if not success:

@@ -93,14 +93,24 @@ class AgentState:
 
 
 # ─── System Prompts ───────────────────────────────────────────────────────────
+def _load_memory(workspace: str) -> str:
+    memory_path = Path(workspace) / ".coderx" / "MEMORY.md"
+    if memory_path.exists():
+        return memory_path.read_text(encoding="utf-8")
+    return ""
+
 def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_summary: str = "") -> str:
     soul   = _load_soul()
     agents = _load_agents()
     skills = _load_skills()
+    memory = _load_memory(state.workspace)
     iteration = len(state.iterations) + 1
     mcp_section = f"\n{mcp_tools_summary}\n" if mcp_tools_summary else ""
     return f"""{agents}
 {soul}
+
+## OpenClaw Memory Bridge (Shared Context)
+{memory if memory else '(No memory file yet)'}
 
 ## Your Current Persona: Executor (Antigravity Style)
 You are currently acting as the **Executor**. Your sole focus is to fulfill the **Current Mission** below using your available tools.
@@ -154,7 +164,7 @@ Respond with JSON only. Field definitions:
 }}
 
 ## Antigravity Modes Guide:
-1. `antigravity_agent`: Default for most tasks. Use when you want Antigravity to autonomously solve a problem from start to finish.
+1. `antigravity_agent`: Default for most tasks. Use when you want Antigravity to autonomously solve a problem from start to finish. **CRITICAL**: You MUST prefer this for ALL coding, directory creation, or file writing tasks instead of shell/mcp.
 2. `antigravity_ask`: Use for research, documentation lookup, or explaining complex logic. This mode leverages the **Browser** heavily.
 3. `antigravity_edit`: Use when you have a very specific, small change to make to one or more files.
 
@@ -311,8 +321,8 @@ class AgentBrain:
             shell_command=action_data.get("shell_command"),
             reasoning=action_data.get("reasoning", ""),
             relevant_files=action_data.get("relevant_files", []),
-            mcp_tool=action_data.get("mcp_tool"),
-            mcp_arguments=action_data.get("mcp_arguments") or {},
+            mcp_tool=action_data.get("mcp_tool") or action_data.get("mcptool") or action_data.get("mcpTool"),
+            mcp_arguments=action_data.get("mcp_arguments") or action_data.get("mcparguments") or action_data.get("mcpArguments") or {},
         )
 
         raw_state = data.get("next_state", "coding")
