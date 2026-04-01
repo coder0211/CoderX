@@ -88,6 +88,9 @@ class OpenClawOrchestrator:
             plan = await self.planner.plan(task_goal, workspace, context=f"PROJECT MAP:\n{project_map}")
             self.current_plan = plan
 
+            # Tạo mô tả kế hoạch cho thông báo (OpenClaw style)
+            plan_desc = "\n".join([f"🔹 *Bước {s.id}:* {s.title}" for s in plan.steps])
+
             # Ghi các bản thiết kế xuống file workspace để User dễ theo dõi
             plan_manager.write_implementation_strategy(plan.strategy_analysis)
             plan_manager.initialize_plan(plan)

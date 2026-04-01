@@ -39,6 +39,13 @@
         "NODE_NO_WARNINGS": "1"
       },
       "cwd": null
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }
