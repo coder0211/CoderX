@@ -234,6 +234,18 @@ def _load_agents() -> str:
     return ""
 
 
+def _load_skills() -> str:
+    """Load tất cả skills từ knowledges/skills/ để inject vào system prompt."""
+    skills_dir = Path(__file__).parent.parent / "knowledges" / "skills"
+    if not skills_dir.exists():
+        return ""
+
+    skill_texts = []
+    for skill_file in sorted(skills_dir.glob("*.md")):
+        content = skill_file.read_text().strip()
+        skill_name = skill_file.stem.upper()
+        skill_texts.append(f"### Skill: {skill_name}\n{content}")
+
     return "\n\n---\n\n".join(skill_texts) if skill_texts else ""
 
 
