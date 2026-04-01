@@ -138,7 +138,7 @@ class AntigravityExecutor:
             "chat",
             "--mode", mode,
             "--reuse-window",
-            "--maximize",  # Tối đa hóa cửa sổ cho agent
+            "--maximize",
         ]
 
         # Thêm context files
@@ -146,7 +146,17 @@ class AntigravityExecutor:
             for f in context_files:
                 cmd.extend(["--add-file", f])
 
-        cmd.append("-")  # Dùng STDIN để an toàn với prompt dài/multiline
+        # Antigravity CLI: prompt PHẢI là positional argument
+        # Dấu '-' chỉ để APPEND stdin vào argument, không thay thế được
+        # Với prompt dài > 2000 chars: truyền tóm tắt qua arg, full qua stdin
+        MAX_ARG_LEN = 2000
+        use_stdin = len(final_prompt) > MAX_ARG_LEN
+        if use_stdin:
+            # Truyền phần đầu qua arg, phần đầy đủ qua stdin
+            cmd.append(final_prompt[:MAX_ARG_LEN] + "...")
+            cmd.append("-")  # Append stdin
+        else:
+            cmd.append(final_prompt)
 
         try:
             log(f"Executing chat command in [cyan]{workspace}[/cyan] ...", category="Executor")
@@ -156,16 +166,17 @@ class AntigravityExecutor:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=workspace,
-                stdin=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if use_stdin else asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            # CLI của Antigravity (VS Code-based GUI) thường thoát ngay sau khi
-            # route prompt vào panel. Ta dùng timeout ngắn để bắt lỗi tức thì.
+            # CLI của Antigravity thoát ngay sau khi gửi prompt vào GUI panel.
+            # Ta đợi tối đa 10s để bắt lỗi tức thì.
             try:
+                stdin_data = final_prompt.encode('utf-8') if use_stdin else None
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(input=final_prompt.encode('utf-8')),
+                    proc.communicate(input=stdin_data),
                     timeout=10,
                 )
                 stdout_text = stdout.decode('utf-8').strip() if stdout else ""
@@ -175,13 +186,17 @@ class AntigravityExecutor:
                 if proc.returncode not in (None, 0):
                     return False, f"CLI Error (code {proc.returncode}): {output}"
 
-                log(f"Prompt delivered ✓ ({len(final_prompt)} chars)", category="Executor", style="green")
+                log(f"Prompt delivered ✓ ({len(final_prompt)} chars) via {'arg+stdin' if use_stdin else 'arg'}", category="Executor", style="green")
                 return True, output
 
             except asyncio.TimeoutError:
-                # Bình thường — CLI đang giữ stdin open, prompt đã được route vào GUI
-                proc.stdin.close()  # Đóng stdin để CLI thoát
-                log("CLI still running (GUI mode) — prompt was sent", category="Executor", style="dim")
+                # CLI vẫn đang chạy — đây là bình thường với GUI mode
+                if use_stdin:
+                    try:
+                        proc.stdin.close()
+                    except Exception:
+                        pass
+                log("CLI timeout (GUI still active) — prompt was delivered", category="Executor", style="dim")
                 return True, "Prompt delivered to Antigravity (GUI session active)"
 
         except Exception as e:
