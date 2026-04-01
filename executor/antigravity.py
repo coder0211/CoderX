@@ -32,6 +32,43 @@ class AntigravityExecutor:
     Duy trì server và browser xuyên suốt vòng đời của executor.
     """
 
+    # ─── Selectors ─────────────────────────────────────────────────────────────
+    TRUST_SELECTORS = [
+        "button:has-text('Yes, I trust the authors')",
+        "button[aria-label*='Trust']",
+        ".monaco-button:has-text('Trust')"
+    ]
+    CHAT_CONTAINER_SELECTORS = [
+        ".chat-view-container", ".aichat-view", "[aria-label='Chat input']",
+        ".composite.sidebar[aria-label*='Chat']"
+    ]
+    CHAT_BUTTONS_SELECTORS = [
+        "a.action-label.codicon-comment",
+        "[aria-label*='Antigravity']",
+        "[title*='Antigravity']",
+        "[aria-label*='Chat']",
+        "[title*='Chat']",
+        ".codicon-comment",
+        "[data-testid='chat']",
+    ]
+    INPUT_SELECTORS = [
+        "textarea.chat-editor-input",
+        "[aria-label='Chat input']",
+        ".aichat-input textarea",
+        ".chat-input textarea",
+        "[placeholder*='Ask']",
+        "[placeholder*='Describe']",
+        ".monaco-editor[aria-label*='chat'] textarea"
+    ]
+    RUNNING_SELECTORS = [
+        "[aria-label='Stop']", "button:has-text('Stop')", ".codicon-stop-circle",
+        "[aria-label='Interrupt']", ".chat-stop-button"
+    ]
+    RESPONSE_SELECTORS = [
+        ".aichat-response", ".chat-response .rendered-markdown", 
+        ".chat-message-content", ".markdown-content"
+    ]
+
     def __init__(self):
         self.port = DEFAULT_PORT
         self.headless = False
@@ -42,6 +79,14 @@ class AntigravityExecutor:
         self._page = None
         self._playwright_ctx = None
         self._current_workspace = None
+
+    @property
+    def modifier_key(self) -> str:
+        """Trả về 'Meta' (Cmd) cho macOS và 'Control' cho các OS khác."""
+        try:
+            return "Meta" if os.uname().sysname == "Darwin" else "Control"
+        except Exception:
+            return "Control"
 
     async def run(
         self,
@@ -126,21 +171,28 @@ class AntigravityExecutor:
             self._current_workspace = workspace
 
     async def _handle_startup_dialogs(self) -> None:
-        """Xử lý các dialog cản trở như 'Trust Workspace'."""
+        """Xử lý các dialog cản trở như 'Trust Workspace' và dọn dẹp các tab Welcome."""
         page = self._page
         try:
-            # 1. Trust dialog
-            trust_btn = page.locator("button:has-text('Yes, I trust the authors')").first
-            if await trust_btn.is_visible(timeout=3000):
-                await trust_btn.click()
-                log("Clicked 'Trust Workspace'", category="Executor", style="dim")
-                await asyncio.sleep(1)
+            # 1. Trust dialog (nhiều biến thể selector)
+            for sel in self.TRUST_SELECTORS:
+                try:
+                    btn = page.locator(sel).first
+                    if await btn.is_visible(timeout=1000):
+                        await btn.click()
+                        log("Clicked 'Trust Workspace'", category="Executor", style="dim")
+                        await asyncio.sleep(0.5)
+                        break
+                except Exception:
+                    continue
 
-            # 2. Close Welcome tabs if any
-            close_welcome = page.locator("[aria-label*='Welcome'], [title*='Welcome'] .action-label.codicon-close").first
-            if await close_welcome.is_visible(timeout=1000):
-                await close_welcome.click()
-                await asyncio.sleep(0.5)
+            # 2. Shortcut để đóng tất cả các tab (Welcome, etc.)
+            # Cmd+k w: Close All Editors
+            await page.keyboard.press(f"{self.modifier_key}+k")
+            await asyncio.sleep(0.1)
+            await page.keyboard.press("w")
+            log("Closed all tabs/editors via shortcut", category="Executor", style="dim")
+            await asyncio.sleep(0.5)
 
         except Exception as e:
             log(f"Startup dialog check error: {e}", category="Executor", style="dim")
@@ -159,11 +211,15 @@ class AntigravityExecutor:
 
         log(f"Starting antigravity serve-web on port {self.port}...", category="Executor", style="cyan")
 
+        # Đặt CWD là thư mục cha chung (Documents) nếu có thể để tránh lỗi Access Denied khi chuyển workspace
+        cwd = "/Users/hoa.nguyen3/Documents"
+        
         self._server_proc = subprocess.Popen(
-            ["antigravity", "serve-web", "--port", str(self.port), "--without-connection-token"],
+            ["antigravity", "serve-web", "--port", str(self.port), "--without-connection-token", "--accept-server-license-terms"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            cwd=cwd
         )
 
         deadline = time.time() + SERVE_WEB_STARTUP_TIMEOUT
@@ -192,40 +248,42 @@ class AntigravityExecutor:
         self._page = await context.new_page()
 
     async def _open_chat_panel(self) -> None:
-        """Mở Antigravity chat panel."""
+        """Mở Antigravity chat panel và đảm bảo nó hiển thị."""
         page = self._page
-        # 1. Check xem panel đã mở chưa (check sự hiện diện của input hoặc container)
-        if await page.locator(".chat-view-container, .aichat-view, [aria-label='Chat input']").first.is_visible(timeout=500):
-            return
+        
+        # 1. Check xem panel đã mở chưa
+        for sel in self.CHAT_CONTAINER_SELECTORS:
+            if await page.locator(sel).first.is_visible(timeout=500):
+                return
 
         log("Opening chat panel...", category="Executor", style="dim")
 
         # 2. Danh sách các nút có thể mở chat
-        chat_buttons = [
-            page.locator("a.action-label.codicon-comment"), # Toolbar icon
-            page.locator("[aria-label*='Chat']"),
-            page.locator("[title*='Chat']"),
-            page.locator(".codicon-comment"),
-            page.locator("[data-testid='chat']"),
-        ]
-
-        for btn in chat_buttons:
+        for sel in self.CHAT_BUTTONS_SELECTORS:
             try:
-                if await btn.first.is_visible(timeout=1000):
-                    await btn.first.click()
+                btn = page.locator(sel).first
+                if await btn.is_visible(timeout=1000):
+                    await btn.click()
                     await asyncio.sleep(1.5)
-                    # Xác nhận đã mở
-                    if await page.locator("[aria-label='Chat input']").first.is_visible(timeout=500):
-                        log("Chat panel opened via click", category="Executor", style="dim")
-                        return
+                    # Xác nhận đã mở qua input hiện diện
+                    for input_sel in self.INPUT_SELECTORS[:2]:
+                        if await page.locator(input_sel).first.is_visible(timeout=500):
+                            log("Chat panel opened via click", category="Executor", style="dim")
+                            return
             except Exception:
                 continue
 
-        # 3. Fallback shortcut
-        modifier = "Meta" if os.uname().sysname == "Darwin" else "Control"
-        await page.keyboard.press(f"{modifier}+i")
-        await asyncio.sleep(2)
-        log("Chat panel opened via shortcut", category="Executor", style="dim")
+        # 3. Fallback shortcuts
+        # Thử Cmd+L (New Chat) hoặc Cmd+I (Inline/Side Chat)
+        for key in ["l", "i"]:
+            await page.keyboard.press(f"{self.modifier_key}+{key}")
+            await asyncio.sleep(1.5)
+            for input_sel in self.INPUT_SELECTORS[:2]:
+                if await page.locator(input_sel).first.is_visible(timeout=500):
+                    log(f"Chat panel opened via shortcut {self.modifier_key}+{key}", category="Executor", style="dim")
+                    return
+
+        log("Warning: Could not confirm chat panel is open", category="Executor", style="yellow")
 
     async def _set_chat_mode(self, mode: str) -> None:
         """Chọn mode: agent / ask / edit."""
@@ -241,18 +299,14 @@ class AntigravityExecutor:
             pass
 
     async def _send_prompt(self, prompt: str) -> None:
-        """Gõ prompt và gửi."""
+        """Gõ prompt và gửi với các bước kiểm tra chắc chắn."""
         page = self._page
-        # Thử lại trust dialog nếu chưa xử lý xong
+        # Đảm bảo các dialog không che khuất
         await self._handle_startup_dialogs()
 
-        input_selectors = [
-            ".aichat-input textarea", ".chat-input textarea", "[aria-label='Chat input']",
-            "[placeholder*='Ask']", "[placeholder*='Describe']", "textarea.chat-editor-input",
-            ".monaco-editor[aria-label*='chat'] textarea"
-        ]
         input_elem = None
-        for sel in input_selectors:
+        # Đợi tối đa 10s cho bất kỳ selector nào trong INPUT_SELECTORS xuất hiện
+        for sel in self.INPUT_SELECTORS:
             try:
                 elem = page.locator(sel).first
                 if await elem.is_visible(timeout=2000):
@@ -262,58 +316,84 @@ class AntigravityExecutor:
                 continue
 
         if input_elem is None:
-            raise RuntimeError("Cannot find chat input.")
+            raise RuntimeError(f"Cannot find chat input after waiting. Tried: {', '.join(self.INPUT_SELECTORS[:3])}...")
 
+        log("Focusing and filling prompt...", category="Executor", style="dim")
         await input_elem.click()
-        modifier = "Meta" if os.uname().sysname == "Darwin" else "Control"
-        await page.keyboard.press(f"{modifier}+a")
-        await page.keyboard.press("Delete")
-        await input_elem.fill(prompt)
         await asyncio.sleep(0.3)
+        
+        # Xóa nội dung cũ bằng keyboard shortcut cho chắc chắn
+        await page.keyboard.press(f"{self.modifier_key}+a")
+        await page.keyboard.press("Delete")
+        await asyncio.sleep(0.2)
+        
+        await input_elem.fill(prompt)
+        await asyncio.sleep(0.5)
+        
+        # Nhấn Enter để gửi
         await page.keyboard.press("Enter")
+        log("Prompt sent.", category="Executor", style="dim")
 
     async def _wait_for_response(self, timeout: int = RESPONSE_MAX_TIMEOUT) -> str:
-        """Đợi response hoàn chỉnh."""
+        """Đợi response hoàn chỉnh với cơ chế chống rung (debounce)."""
         page = self._page
         deadline = time.time() + timeout
         last_response = ""
         last_change_time = time.time()
-
-        response_selectors = [".aichat-response", ".chat-response .rendered-markdown", ".chat-message-content"]
-        running_selectors = ["[aria-label='Stop']", "button:has-text('Stop')", ".codicon-stop-circle"]
+        
+        log(f"Waiting for agent response (timeout={timeout}s)...", category="Executor", style="dim")
+        
+        # Flag để kiểm tra xem đã bắt đầu nhận response chưa
+        started_receiving = False
 
         while time.time() < deadline:
             await asyncio.sleep(RESPONSE_POLL_INTERVAL)
+            
+            # 1. Kiểm tra trạng thái "đang chạy"
             is_running = False
-            for sel in running_selectors:
+            for sel in self.RUNNING_SELECTORS:
                 try:
-                    if await page.locator(sel).first.is_visible(timeout=500):
+                    if await page.locator(sel).first.is_visible(timeout=100):
                         is_running = True
                         break
                 except Exception:
                     pass
 
+            # 2. Lấy nội dung hiện tại từ các container khả thi
             current_response = ""
-            for sel in response_selectors:
+            for sel in self.RESPONSE_SELECTORS:
                 try:
-                    texts = await page.locator(sel).all_text_contents()
-                    if texts:
-                        current_response = "\n".join(texts).strip()
-                        break
+                    elements = await page.locator(sel).all()
+                    if elements:
+                        # Thường ta chỉ quan tâm message cuối cùng hoặc gom tất cả thành một stream
+                        texts = [await el.inner_text() for el in elements]
+                        current_response = "\n\n---\n\n".join(texts).strip()
+                        if current_response:
+                            break
                 except Exception:
-                    pass
+                    continue
 
-            if current_response != last_response:
-                last_response = current_response
-                last_change_time = time.time()
+            if current_response:
+                if not started_receiving:
+                    log("Started receiving response...", category="Executor", style="dim")
+                    started_receiving = True
+                
+                if current_response != last_response:
+                    last_response = current_response
+                    last_change_time = time.time()
 
-            if not is_running and current_response:
-                await asyncio.sleep(1.0)
+            # 3. Điều kiện kết thúc: Không còn chạy và đã có nội dung
+            if not is_running and started_receiving:
+                # Đợi thêm một nhịp ngắn để chắc chắn animation hoàn tất
+                await asyncio.sleep(1.5)
                 return last_response
 
-            if time.time() - last_change_time > RESPONSE_IDLE_TIMEOUT and current_response:
-                return current_response
+            # 4. Timeout nếu không có thay đổi quá lâu (idle) sau khi đã bắt đầu nhận
+            if started_receiving and (time.time() - last_change_time > RESPONSE_IDLE_TIMEOUT):
+                log("Response idle timeout reached.", category="Executor", style="yellow")
+                return last_response
 
+        log("Hard timeout reached while waiting for response.", category="Executor", style="red")
         return last_response or "Timeout"
 
     async def stop(self) -> None:
