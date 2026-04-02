@@ -183,7 +183,6 @@ async def classify_intent(text: str, client) -> dict:
                     {"role": "system", "content": CLASSIFY_PROMPT},
                     {"role": "user", "content": text},
                 ],
-                max_completion_tokens=512,
                 response_format={"type": "json_object"},
             ),
             timeout=config.INTENT_TIMEOUT
@@ -340,7 +339,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             client.chat.completions.create(
                 model=config.FAST_MODEL,
                 messages=messages,
-                max_completion_tokens=400,
             ),
             timeout=config.LLM_TIMEOUT
         )
@@ -365,7 +363,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
                                 {"role": "system", "content": "Summarize the result in Vietnamese, concisely and naturally."},
                                 {"role": "user", "content": f"User question: {text}\nMCP Result: {mcp_result}"},
                             ],
-                            max_completion_tokens=200,
                         ),
                         timeout=config.LLM_TIMEOUT
                     )

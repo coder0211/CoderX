@@ -50,9 +50,9 @@ class Config:
     MCP_TOOL_TIMEOUT: int = int(os.getenv("MCP_TOOL_TIMEOUT", "30"))
 
     # Timeout (giây) cho các cuộc gọi LLM chung (chat, summary, report)
-    LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "60"))
-    # Timeout (giây) cho việc phân loại ý định (cần nhanh)
-    INTENT_TIMEOUT: int = int(os.getenv("INTENT_TIMEOUT", "20"))
+    LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "300"))
+    # Timeout (giây) cho việc phân loại ý định (cần nhanh nhưng reasoning model có thể lâu)
+    INTENT_TIMEOUT: int = int(os.getenv("INTENT_TIMEOUT", "300"))
 
 
     @classmethod
