@@ -22,14 +22,74 @@ class ActionType(str, Enum):
 
 
 class WorkflowState(str, Enum):
-    PLANNING = "planning"             # Lên kế hoạch
-    CODING = "coding"                 # Đang viết code/thực thi lệnh
-    VERIFYING = "verifying"           # Kiểm thử, đọc lại kết quả
-    AWAITING_REVIEW = "awaiting_review" # Chờ xác nhận từ người dùng
-    ARCH_REVIEW = "arch_review"       # Xem xét lại kiến trúc
-    PRODUCT_REVIEW = "product_review" # Xem xét lại UX/UI
-    COMPLETED = "completed"           # Hoàn thành
-    FAILED = "failed"                 # Thất bại/Bó tay
+    PLANNING       = "planning"       # Lên kế hoạch, chia nhỏ nhiệm vụ
+    READING        = "reading"        # Đọc file/context — BẮT BUỘC trước CODING
+    CODING         = "coding"         # Viết code, tạo file, sửa lỗi
+    VERIFYING      = "verifying"      # Chạy test/lint — BẮT BUỘC trước COMPLETED
+    ARCH_REVIEW    = "arch_review"    # Pushback: đề xuất thay đổi kiến trúc
+    PRODUCT_REVIEW = "product_review" # Pushback: đề xuất thay đổi UX/UI
+    COMPLETED      = "completed"      # CHỈ vào được từ VERIFYING
+    FAILED         = "failed"         # Bó tay hoàn toàn
+
+
+# ─── State Machine Transition Table ──────────────────────────────────────────
+# Enforced at runtime in agent_loop.py — LLM không thể bypass
+TRANSITION_TABLE: dict[WorkflowState, frozenset] = {
+    WorkflowState.PLANNING:       frozenset({
+        WorkflowState.READING, WorkflowState.CODING,
+        WorkflowState.ARCH_REVIEW, WorkflowState.FAILED,
+    }),
+    WorkflowState.READING:        frozenset({
+        WorkflowState.CODING, WorkflowState.PLANNING,
+        WorkflowState.ARCH_REVIEW, WorkflowState.FAILED,
+    }),
+    WorkflowState.CODING:         frozenset({
+        WorkflowState.VERIFYING, WorkflowState.READING, WorkflowState.CODING,
+        WorkflowState.ARCH_REVIEW, WorkflowState.PRODUCT_REVIEW, WorkflowState.FAILED,
+    }),
+    WorkflowState.VERIFYING:      frozenset({
+        WorkflowState.COMPLETED, WorkflowState.CODING,
+        WorkflowState.READING, WorkflowState.FAILED,
+    }),
+    WorkflowState.ARCH_REVIEW:    frozenset({
+        WorkflowState.PLANNING, WorkflowState.CODING, WorkflowState.FAILED,
+    }),
+    WorkflowState.PRODUCT_REVIEW: frozenset({
+        WorkflowState.PLANNING, WorkflowState.CODING, WorkflowState.FAILED,
+    }),
+    WorkflowState.COMPLETED:      frozenset(),  # terminal
+    WorkflowState.FAILED:         frozenset(),  # terminal
+}
+
+
+def validate_transition(
+    current: WorkflowState,
+    proposed: WorkflowState,
+    has_verified: bool,
+) -> tuple[WorkflowState, Optional[str]]:
+    """
+    Kiểm tra và sửa state transition nếu vi phạm rules.
+    Returns (corrected_state, warning_message | None).
+    """
+    allowed = TRANSITION_TABLE.get(current, frozenset())
+
+    # Hard gate 1: COMPLETED chỉ đạt được sau khi đã VERIFYING ít nhất 1 lần
+    if proposed == WorkflowState.COMPLETED and not has_verified:
+        return WorkflowState.VERIFYING, (
+            "⚠️ [StateMachine] COMPLETED bị chặn — chưa VERIFYING. "
+            "Buộc chuyển → VERIFYING."
+        )
+
+    # Hard gate 2: Transition không hợp lệ theo bảng
+    if proposed not in allowed:
+        fallback = WorkflowState.CODING
+        allowed_names = ", ".join(s.value for s in allowed) or "none (terminal)"
+        return fallback, (
+            f"⚠️ [StateMachine] Invalid transition {current.value!r} → {proposed.value!r}. "
+            f"Allowed: [{allowed_names}]. Fallback → {fallback.value!r}."
+        )
+
+    return proposed, None
 
 
 @dataclass
@@ -155,31 +215,50 @@ Iteration: {iteration} / {config.MAX_ITERATIONS}
 ## History (what you've done so far)
 {state.to_context() or "Nothing yet — this is the first action."}
 
+## State Machine — Transition Rules (ENFORCED AT RUNTIME)
+Valid transitions (violations are auto-corrected by the system):
+```
+planning       → reading, coding, arch_review, failed
+reading        → coding, planning, arch_review, failed
+coding         → verifying, reading, coding, arch_review, product_review, failed
+verifying      → completed, coding, reading, failed
+arch_review    → planning, coding, failed
+product_review → planning, coding, failed
+completed      → (TERMINAL — only reachable from verifying)
+failed         → (TERMINAL)
+```
+**CRITICAL RULES:**
+1. `reading` state: Use `filesystem/read_file` or `filesystem/list_dir` ONLY. You MUST read any file before writing it.
+2. `verifying` state: You MUST run a shell command (pytest/npm test/lint/cat) to verify your work. NO MCP write operations.
+3. `completed` is BLOCKED until you have been to `verifying` at least once.
+4. `arch_review` / `product_review`: Use ONLY to propose a better approach in `reasoning`. The action must still be an actual tool call (read a file, list a dir).
+5. If you repeat the same action 3 times without progress → set `next_state` to `failed`.
+
 ## Your Task Now
 Based on the mission, workspace state, and history above:
 1. REASON: Analyze the current state. What is missing? What errors occurred?
 2. STRATEGIZE: Does the current path align with **Product & Architecture** principles in SOUL.md?
-   - If you see a better UX or simpler architecture, **Push Back** by suggesting it in your reasoning and setting `next_state` to `product_review` or `arch_review`.
-3. PLAN: Formulate the next atomic step to move closer to the goal.
-4. ACT: Execute the step using a single action (MCP or Shell).
-5. NEXT STATE: Should you move to 'coding', 'verifying', 'arch_review', 'product_review', 'awaiting_review', or are you 'completed'?
+   - If you see a better UX or simpler architecture, **Push Back** by setting `next_state` to `product_review` or `arch_review`.
+3. PLAN: Formulate the next atomic step. Follow the Skill: READING → CODING → VERIFYING flow.
+4. ACT: Execute the step using exactly one action (MCP or Shell).
+5. NEXT STATE: Pick the correct next state per the transition rules above.
 
 Respond with JSON only. Field definitions:
-- `next_state`: MUST be one of exactly: "planning", "coding", "verifying", "arch_review", "product_review", "awaiting_review", "completed", "failed".
+- `next_state`: MUST be one of exactly: "planning", "reading", "coding", "verifying", "arch_review", "product_review", "completed", "failed".
 - `action.type`: MUST be one of exactly: "shell", "mcp".
 
 {{
-  "reasoning": "Your analysis. Use this to provide architectural or UX feedback if needed.",
-  "next_state": "planning | coding | verifying | arch_review | product_review | awaiting_review | completed | failed",
-  "confidence": 0-100,
-  "decision_reason": "Why you made this decision (Vietnamese OK)",
+  "reasoning": "Your analysis of current state. Mention architecture/UX concerns if any.",
+  "next_state": "planning | reading | coding | verifying | arch_review | product_review | completed | failed",
+  "confidence": 0,
+  "decision_reason": "Why you chose this next_state (Vietnamese OK)",
   "action": {{
     "type": "shell | mcp",
-    "title": "Short title for this action (Vietnamese OK)",
+    "title": "Short action title (Vietnamese OK)",
     "reasoning": "Why this specific action",
-    "prompt": "Specific description of what you are trying to achieve (English)",
-    "shell_command": "The actual shell command to run if type=shell",
-    "mcp_tool": "qualified tool name if type=mcp",
+    "prompt": "What you are trying to achieve (English)",
+    "shell_command": "The actual shell command if type=shell, else null",
+    "mcp_tool": "qualified tool name if type=mcp, else null",
     "mcp_arguments": {{}}
   }}
 }}

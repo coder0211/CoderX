@@ -4,8 +4,10 @@ Vòng lặp tự hành: Reason → Act → Observe → Repeat until DONE.
 Bot tự quyết định mọi thứ, không cần user confirm từng bước.
 """
 import asyncio
+import hashlib
 import time
 import os
+from collections import deque
 from pathlib import Path
 from typing import Callable, Optional
 from orchestrator.logger import log, log_agent, console
@@ -14,11 +16,44 @@ from executor.shell import ShellExecutor
 from llm.agent_brain import (
     Action, ActionType, AgentBrain, AgentIteration,
     AgentState, WorkflowState, Observation,
+    TRANSITION_TABLE, validate_transition,
 )
 from mcp_client.tools_bridge import get_mcp_bridge
 from orchestrator.memory_manager import MemoryManager
 from workspace.monitor import WorkspaceMonitor
 from config import config
+
+
+class _StuckDetector:
+    """
+    Phát hiện agent lặp cùng một action quá nhiều lần liên tục — stuck loop.
+    """
+    def __init__(self, window: int = 3):
+        self._window = window
+        self._history: deque[str] = deque(maxlen=window)
+
+    def _fingerprint(self, action: Action) -> str:
+        """Hash duy nhất cho một action để so sánh."""
+        if action.shell_command:
+            raw = f"shell:{action.shell_command.strip()}"
+        else:
+            args_str = str(sorted((action.mcp_arguments or {}).items()))
+            raw = f"mcp:{action.mcp_tool}:{args_str}"
+        return hashlib.md5(raw.encode()).hexdigest()
+
+    def record(self, action: Action) -> bool:
+        """
+        Ghi action vào lịch sử.
+        Returns True nếu phát hiện stuck (cùng fingerprint lặp liên tục).
+        """
+        fp = self._fingerprint(action)
+        self._history.append(fp)
+        if len(self._history) == self._window and len(set(self._history)) == 1:
+            return True
+        return False
+
+    def reset(self):
+        self._history.clear()
 
 
 class AutonomousAgent:
@@ -98,6 +133,8 @@ class AutonomousAgent:
         )
 
         current_state = WorkflowState.PLANNING
+        has_verified  = False           # Gate: COMPLETED requires VERIFYING first
+        stuck_detector = _StuckDetector()
         iteration = 0
 
         try:
@@ -127,15 +164,24 @@ class AutonomousAgent:
                 )
                 self.live["last_thought"] = action.reasoning[:300]
 
+                # ── Validate state transition ──────────────────────────────────
+                next_state, sm_warning = validate_transition(current_state, next_state, has_verified)
+                if sm_warning:
+                    await self._say(sm_warning, silent=True)
+
                 await self._say(
                     f"💭 **Suy nghĩ:** _{action.reasoning}_\n"
-                    f"🎯 **Hành động tiếp theo:** {action.title} \n"
-                    f"👉 **Chuyển sang State:** {next_state.value.upper()} (tin cậy: {confidence}%)\n"
+                    f"🎯 **Hành động tiếp theo:** {action.title}\n"
+                    f"👉 **State:** {current_state.value.upper()} → {next_state.value.upper()} (tin cậy: {confidence}%)\n"
                     f"📝 {decision_reason}",
                     silent=True
                 )
 
-                # ── Early exit: task already done ─────────────────────────────
+                # ── Track VERIFYING gate ───────────────────────────────────────
+                if next_state == WorkflowState.VERIFYING:
+                    has_verified = True
+
+                # ── Early exit checks ──────────────────────────────────────────
                 if next_state == WorkflowState.COMPLETED:
                     state.final_state = WorkflowState.COMPLETED
                     await self._say(
@@ -161,18 +207,30 @@ class AutonomousAgent:
                     action, workspace, monitor, iteration
                 )
 
+                # ── Stuck Detection ────────────────────────────────────────────
+                if stuck_detector.record(action):
+                    await self._say(
+                        f"🔄 *[StuckDetector]* Cùng action lặp 3 lần liên tục: `{action.title}`. "
+                        "Buộc thoát khẩn cấp.",
+                        silent=False
+                    )
+                    state.final_state = WorkflowState.FAILED
+                    state.final_summary = (
+                        f"Agent kẹt vòng lặp vô nghĩa — action '{action.title}' lặp 3 lần."
+                    )
+                    break
+
                 # ── Record iteration ──────────────────────────────────────────
                 self.live["phase"]       = "observing"
                 self.live["last_result"] = observation.summary[:200]
-                
-                # Nếu confidence cao hoặc iteration định kỳ, lưu lại vào memory
+
                 if confidence > 90 or iteration % 5 == 0:
-                     self.memory.append_decision(
-                         iteration, 
-                         f"Mid-step Pivot/Decision: {action.title}", 
-                         "learning", 
-                         f"Thought: {action.reasoning}\nResult: {observation.summary[:500]}"
-                     )
+                    self.memory.append_decision(
+                        iteration,
+                        f"Mid-step Pivot/Decision: {action.title}",
+                        "learning",
+                        f"Thought: {action.reasoning}\nResult: {observation.summary[:500]}"
+                    )
 
                 agent_iter = AgentIteration(
                     iteration=iteration,
@@ -196,8 +254,11 @@ class AutonomousAgent:
                     + files_info,
                     silent=True
                 )
-                
-                # Update current state to the state decided by the brain
+
+                # Reset stuck detector khi action thành công
+                if observation.status == "done":
+                    stuck_detector.reset()
+
                 current_state = next_state
         except Exception as e:
             import traceback
