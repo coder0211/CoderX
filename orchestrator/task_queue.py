@@ -159,7 +159,7 @@ class TaskQueue:
             self._current_task = task
 
             try:
-                log_msg = f"Task #{task.task_id} bắt đầu: {task.goal}"
+                log_msg = f"[Queue Worker: Step 1] Task #{task.task_id} bắt đầu: {task.goal}"
                 log_queue(log_msg)
                 
                 # Use Orchestrator (OpenClaw Style)
@@ -169,7 +169,7 @@ class TaskQueue:
                 self._current_agent = None
 
                 remaining = self._queue.qsize()
-                log_queue(f"Task #{task.task_id} hoàn thành!")
+                log_queue(f"[Queue Worker: Step 2] Task #{task.task_id} hoàn thành!")
                 if remaining > 0:
                     await task.notify(
                         f"✅ Em làm xong Task #{task.task_id} rồi nha!\n"
@@ -185,6 +185,9 @@ class TaskQueue:
                 await task.notify(f"🛑 Task #{task.task_id} bị hủy.")
                 raise
             except Exception as e:
+                import traceback
+                from orchestrator.logger import log_error
+                log_error(f"[Queue Error] Task #{task.task_id} crashed:\n{traceback.format_exc()}")
                 await task.notify(f"❌ Task #{task.task_id} lỗi: `{e}`")
             finally:
                 self._queue.task_done()

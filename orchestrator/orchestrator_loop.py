@@ -84,7 +84,7 @@ class OpenClawOrchestrator:
             plan_manager = PlanManager(workspace)
 
             # 1. Lập kế hoạch (OpenClaw style)
-            await self._say("📝 *Đang phân tích dự án và lập kế hoạch tổng thể...*", silent=True)
+            await self._say("📝 *[Orchestrator: Step 1]* Đang phân tích dự án và lập kế hoạch tổng thể...*", silent=True)
             plan = await self.planner.plan(task_goal, workspace, context=f"PROJECT MAP:\n{project_map}")
             self.current_plan = plan
 
@@ -107,7 +107,7 @@ class OpenClawOrchestrator:
                 if not self._running:
                     break
 
-                await self._say(f"\n🚀 *Bắt đầu Bước {step.id}/{plan.total_steps}:* _{step.title}_", silent=True)
+                await self._say(f"\n🚀 *[Orchestrator: Step 2]* Bắt đầu Bước {step.id}/{plan.total_steps}:* _{step.title}_", silent=True)
                 
                 # Gọi AutonomousAgent thực thi một step
                 agent = AutonomousAgent(notify=self.notify)
@@ -138,7 +138,7 @@ class OpenClawOrchestrator:
 
                 # Chiến thuật "Review & Refine" (OpenClaw style)
                 if status == "done":
-                    await self._say(f"🔍 *Đang đánh giá kết quả và tinh chỉnh chiến thuật...*", silent=True)
+                    await self._say(f"🔍 *[Orchestrator: Step 2.5]* Đang đánh giá kết quả và tinh chỉnh chiến thuật...*", silent=True)
                     plan = await self.planner.review_and_refine(plan, result, project_map)
                     self.current_plan = plan
                     
@@ -153,7 +153,7 @@ class OpenClawOrchestrator:
 
             # 3. Báo cáo tổng kết
             final_report = await self.planner.summarize_results(plan, self.step_results)
-            await self._say(f"\n🏁 *Hoàn tất nhiệm vụ!*\n{final_report}", silent=False)
+            await self._say(f"\n🏁 *[Orchestrator: Step 3]* Hoàn tất nhiệm vụ!*\n{final_report}", silent=False)
 
         except Exception as e:
             import traceback

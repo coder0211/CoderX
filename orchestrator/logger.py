@@ -30,3 +30,6 @@ def log_queue(message: str):
 
 def log_orchestrator(message: str):
     log(message, category="Orchestrator", style="bold yellow")
+
+def log_telegram(message: str):
+    log(message, category="Telegram", style="bold blue")

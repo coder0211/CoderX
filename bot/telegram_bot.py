@@ -25,6 +25,7 @@ from telegram.ext import (
 
 from config import config
 from orchestrator.task_queue import TaskQueue
+from orchestrator.logger import log_telegram, log_error, console
 
 
 # ─── Global state ──────────────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ def is_allowed(user_id: int) -> bool:
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 async def send(update: Update, text: str, parse_mode=ParseMode.MARKDOWN) -> None:
+    log_telegram(f"[Action: SEND] Sending reply to user {update.effective_user.id}: {text[:100]}...")
     max_len = 4000
     chunks = [text[i:i + max_len] for i in range(0, len(text), max_len)]
     for chunk in chunks:
@@ -97,6 +99,7 @@ async def send(update: Update, text: str, parse_mode=ParseMode.MARKDOWN) -> None
 
 
 async def send_to_chat(bot, chat_id: int, text: str) -> None:
+    log_telegram(f"[Action: SEND_TO_CHAT] Sending message to chat {chat_id}: {text[:100]}...")
     max_len = 4000
     chunks = [text[i:i + max_len] for i in range(0, len(text), max_len)]
     for chunk in chunks:
@@ -167,6 +170,7 @@ Return ONLY the raw JSON object, no extra explanation.
 
 async def classify_intent(text: str, client) -> dict:
     """Dùng LLM để phân loại ý định tin nhắn."""
+    log_telegram(f"[Step 2] Classifying intent for message: '{text[:100]}...'")
     try:
         response = await asyncio.wait_for(
             client.chat.completions.create(
@@ -175,30 +179,32 @@ async def classify_intent(text: str, client) -> dict:
                     {"role": "system", "content": CLASSIFY_PROMPT},
                     {"role": "user", "content": text},
                 ],
-                max_completion_tokens=150,
-                # Removed response_format to improve compatibility with all models
+                max_completion_tokens=512,
+                response_format={"type": "json_object"},
             ),
             timeout=config.INTENT_TIMEOUT
         )
         content = response.choices[0].message.content or ""
         finish_reason = response.choices[0].finish_reason
         
-        if not content.strip():
-            print(f"⚠️ Intent classification returned empty content. Finish reason: {finish_reason}")
+        if not content.strip() or finish_reason == "length":
+            log_error(f"[Step 2] Intent classification failed or truncated. Reason: {finish_reason}")
             return {"intent": "chat"}
             
         # Clean markdown code blocks if present
         clean_content = content.replace("```json", "").replace("```", "").strip()
         try:
-            return json.loads(clean_content)
+            parsed = json.loads(clean_content)
+            log_telegram(f"[Step 2] Classified intent: {parsed.get('intent')} - Goal: {parsed.get('goal', 'None')}")
+            return parsed
         except json.JSONDecodeError:
-            print(f"⚠️ Failed to parse intent JSON: {content}")
+            log_error(f"Failed to parse intent JSON. Content: {content}")
             return {"intent": "chat"}
     except asyncio.TimeoutError:
-        print(f"⚠️ Intent classification timed out after {config.INTENT_TIMEOUT}s")
+        log_error(f"Intent classification timed out after {config.INTENT_TIMEOUT}s")
         return {"intent": "chat"}
     except Exception as e:
-        print(f"⚠️ Intent classification error: {e}")
+        log_error(f"Intent classification error: {e}")
         return {"intent": "chat"}
 
 
@@ -206,10 +212,14 @@ async def classify_intent(text: str, client) -> dict:
 
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
+    text = (update.message.text or "").strip()
+    log_telegram(f"--- NEW MESSAGE FLOW START ---")
+    log_telegram(f"[Step 1] Received message from user {uid}: '{text}'")
+
     if not is_allowed(uid):
+        log_telegram(f"Blocked unauthorized message from {uid}.")
         return
 
-    text = (update.message.text or "").strip()
     if not text:
         return
 
@@ -237,9 +247,11 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     # Phân loại ý định (task | chat | workspace)
     intent_data = await classify_intent(text, client)
     intent = intent_data.get("intent", "chat")
+    log_telegram(f"[Step 3] Routing message to intent: {intent}")
 
     # ── Intent: workspace change ────────────────────────────────────────────────
     if intent == "workspace":
+        log_telegram(f"[Step 4 - Workspace] Handling workspace change")
         import os
         raw_path = intent_data.get("path", "").strip()
         if not raw_path:
@@ -256,6 +268,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     # ── Intent: coding task ─────────────────────────────────────────────────────
     if intent == "task":
+        log_telegram(f"[Step 4 - Task] Appending goal to queue")
         goal = intent_data.get("goal", text)
         reply_vi = intent_data.get("reply_vi", "Ok anh, em nhận việc này nhé!")
 
@@ -279,6 +292,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     # ── Intent: chat (default) ──────────────────────────────────────────────────
+    log_telegram(f"[Step 4 - Chat] Processing chat interaction")
     agent_context = _build_agent_context(q, session)
     mcp_bridge = get_mcp_bridge()
 
@@ -355,18 +369,32 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         session.add_message("user", text)
         session.add_message("assistant", reply)
         await send(update, reply)
+        log_telegram(f"[Step 5] Chat response sent successfully.")
+        log_telegram(f"--- MESSAGE FLOW END ---")
 
-    except Exception:
+    except Exception as e:
+        log_error(f"Error handling chat message: {e}")
+        console.print_exception()
         if q.is_running and q.current_task:
             await send(update, f"🔄 Đang chạy: _{q.current_task.goal}_")
         else:
             await send(update, "✅ Rảnh. Nói cho tôi biết bạn cần làm gì!")
 
 
-# ─── Utility commands (/stop, /status, /queue) ─────────────────────────────────
+# ─── Utility commands (/stop, /status, /queue, /start) ─────────────────────────
+
+async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    log_telegram(f"User {uid} executed /start")
+    if not is_allowed(uid):
+        await update.message.reply_text("⛔ Xin lỗi, anh không có quyền truy cập bot này.")
+        return
+    await send(update, "👋 Chào sếp! CoderX đã sẵn sàng. Sếp cần em làm gì hôm nay?")
+
 
 async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
+    log_telegram(f"User {uid} executed /stop")
     if not is_allowed(uid):
         return
     q = get_queue(uid)
@@ -378,6 +406,7 @@ async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
+    log_telegram(f"User {uid} executed /status")
     if not is_allowed(uid):
         return
     session = get_session(uid)
@@ -420,6 +449,8 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_queue(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    log_telegram(f"User {uid} executed /queue")
     await cmd_status(update, ctx)
 
 
@@ -446,16 +477,29 @@ async def _handle_git_confirm(update: Update, text: str, uid: int, workspace: st
 
 # ─── Bot setup ─────────────────────────────────────────────────────────────────
 
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from orchestrator.logger import log_error, console
+    log_error(f"[Global Error] Exception while handling an update: {context.error}")
+    if context.error:
+        import traceback
+        tb_string = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
+        log_error(f"Traceback:\n{tb_string}")
+
+
 def create_bot() -> Application:
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
-    # Chỉ 3 commands tiện lợi
+    # Chỉ 4 commands tiện lợi
+    app.add_handler(CommandHandler("start",  cmd_start))
     app.add_handler(CommandHandler("stop",   cmd_stop))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("queue",  cmd_queue))
 
     # Tất cả text messages → unified handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # Bắt tất cả các lỗi ngầm, rớt mạng, lỗi bot framework
+    app.add_error_handler(global_error_handler)
 
     return app
 

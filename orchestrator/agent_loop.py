@@ -157,7 +157,7 @@ class AutonomousAgent:
                 snapshot = self._snapshot_workspace(workspace)
                 state.workspace_files = snapshot.split("\n") if snapshot else []
 
-                await self._say(f"🧠 *Đang phân tích bước {iteration}...*", silent=True)
+                await self._say(f"🧠 *[Agent Action: REASONING]* Đang phân tích bước {iteration}...*", silent=True)
                 action, next_state, confidence, decision_reason = await self.brain.reason(
                     state, snapshot,
                     mcp_tools_summary=self.mcp.tools_summary() if self.mcp and self.mcp.is_ready() else "",
@@ -203,6 +203,7 @@ class AutonomousAgent:
                 # ── ACT ───────────────────────────────────────────────────────
                 self.live["phase"]          = "acting"
                 self.live["current_action"] = action.title
+                await self._say(f"🏃 *[Agent Action: EXECUTING]* {action.title}", silent=True)
                 observation = await self._execute_action(
                     action, workspace, monitor, iteration
                 )
@@ -322,7 +323,7 @@ class AutonomousAgent:
     async def _act_shell(self, action: Action, workspace: str) -> Observation:
         """Chạy shell command."""
         cmd = action.shell_command or ""
-        await self._say(f"🖥️ `{cmd}`", silent=True)
+        await self._say(f"🖥️ *[Agent Act: SHELL]* `{cmd}`", silent=True)
 
         shell = ShellExecutor(workspace)
         success, stdout, stderr = await shell.run(cmd)
@@ -368,7 +369,7 @@ class AutonomousAgent:
                 summary="MCP bridge is not ready. Check MCP_ENABLED and MCP_SERVER_* in .env",
             )
 
-        await self._say(f"🔧 *MCP Tool:* `{tool_name}`", silent=True)
+        await self._say(f"🔧 *[Agent Act: MCP Tool]* `{tool_name}`", silent=True)
 
         try:
             result = await asyncio.wait_for(
@@ -387,7 +388,9 @@ class AutonomousAgent:
             return Observation(action=action, status="error", summary=msg)
 
         except Exception as e:
+            from orchestrator.logger import log_error
             msg = f"MCP tool '{tool_name}' error: {e}"
+            log_error(f"[Agent Error: MCP TOOL FAILED] {msg}")
             await self._say(f"❌ {msg}", silent=True)
             return Observation(action=action, status="error", summary=msg)
 

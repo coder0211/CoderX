@@ -11,6 +11,36 @@ from bot.telegram_bot import create_bot, setup_commands
 from llm.client import get_openai_client
 from orchestrator.logger import console, log
 
+def kill_old_instances():
+    """Kill other running instances of bot to prevent Telegram conflict."""
+    import os
+    import signal
+    import subprocess
+    import time
+    
+    current_pid = os.getpid()
+    try:
+        output = subprocess.check_output(["ps", "-A", "-o", "pid,command"], text=True)
+        killed = False
+        for line in output.split('\n'):
+            line_lower = line.lower()
+            # Only match python processes running main.py exactly
+            if "python" in line_lower and "main.py" in line_lower and "grep" not in line_lower and "test" not in line_lower:
+                parts = line.strip().split(maxsplit=1)
+                if parts:
+                    try:
+                        pid = int(parts[0])
+                        if pid != current_pid:
+                            print(f"⚠️ Dọn dẹp: Đã tìm thấy tiến trình cũ (PID {pid}), tiến hành kill...")
+                            os.kill(pid, signal.SIGTERM)
+                            killed = True
+                    except Exception:
+                        pass
+        if killed:
+            time.sleep(1.5) # Wait lightly so OS can clean up the socket/port
+    except Exception as e:
+        print(f"⚠️ Lỗi khi kill tiến trình cũ: {e}")
+
 console = Console()
 
 
@@ -135,4 +165,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    kill_old_instances()
     asyncio.run(main())
