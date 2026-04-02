@@ -168,17 +168,24 @@ Chỉ trả về JSON thuần túy, không giải thích thêm.
 async def classify_intent(text: str, client) -> dict:
     """Dùng LLM để phân loại ý định tin nhắn."""
     try:
-        response = await client.chat.completions.create(
-            model=config.FAST_MODEL,
-            messages=[
-                {"role": "system", "content": CLASSIFY_PROMPT},
-                {"role": "user", "content": text},
-            ],
-            max_completion_tokens=150,
-            response_format={"type": "json_object"},
+        response = await asyncio.wait_for(
+            client.chat.completions.create(
+                model=config.FAST_MODEL,
+                messages=[
+                    {"role": "system", "content": CLASSIFY_PROMPT},
+                    {"role": "user", "content": text},
+                ],
+                max_completion_tokens=150,
+                response_format={"type": "json_object"},
+            ),
+            timeout=config.INTENT_TIMEOUT
         )
         return json.loads(response.choices[0].message.content)
-    except Exception:
+    except asyncio.TimeoutError:
+        print(f"⚠️ Intent classification timed out after {config.INTENT_TIMEOUT}s")
+        return {"intent": "chat"}
+    except Exception as e:
+        print(f"⚠️ Intent classification error: {e}")
         return {"intent": "chat"}
 
 
@@ -203,12 +210,18 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await _handle_git_confirm(update, text, uid, session.workspace)
         return
 
+    # ── Step 0: Immediate Feedback ──────────────────────────────────────────────
+    await ctx.bot.send_chat_action(chat_id=chat_id, action="typing")
+    # Gửi tin nhắn tạm (tùy chọn, để user biết bot đã nhận việc)
+    # placeholder = await update.message.reply_text("🔍 _Em đang đọc..._", parse_mode=ParseMode.MARKDOWN)
+
     # ── Import LLM client ───────────────────────────────────────────────────────
     from llm.client import get_openai_client
     from mcp_client.tools_bridge import get_mcp_bridge
     client = get_openai_client()
 
     # ── Step 1: Classify intent ─────────────────────────────────────────────────
+    # Phân loại ý định (task | chat | workspace)
     intent_data = await classify_intent(text, client)
     intent = intent_data.get("intent", "chat")
 
@@ -290,10 +303,14 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     messages.append({"role": "user", "content": text})
 
     try:
-        response = await client.chat.completions.create(
-            model=config.FAST_MODEL,
-            messages=messages,
-            max_completion_tokens=400,
+        # Gọi LLM với timeout
+        response = await asyncio.wait_for(
+            client.chat.completions.create(
+                model=config.FAST_MODEL,
+                messages=messages,
+                max_completion_tokens=400,
+            ),
+            timeout=config.LLM_TIMEOUT
         )
         reply = response.choices[0].message.content.strip()
 
@@ -305,14 +322,17 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
                     tool_name = parsed["tool"]
                     tool_args = parsed.get("args", {})
                     mcp_result = await mcp_bridge.execute(tool_name, tool_args)
-                    # Diễn giải kết quả
-                    interp = await client.chat.completions.create(
-                        model=config.FAST_MODEL,
-                        messages=[
-                            {"role": "system", "content": "Tóm tắt kết quả bằng tiếng Việt, ngắn gọn, tự nhiên."},
-                            {"role": "user", "content": f"Câu hỏi: {text}\nKết quả: {mcp_result}"},
-                        ],
-                        max_completion_tokens=200,
+                    # Diễn giải kết quả với timeout
+                    interp = await asyncio.wait_for(
+                        client.chat.completions.create(
+                            model=config.FAST_MODEL,
+                            messages=[
+                                {"role": "system", "content": "Tóm tắt kết quả bằng tiếng Việt, ngắn gọn, tự nhiên."},
+                                {"role": "user", "content": f"Câu hỏi: {text}\nKết quả: {mcp_result}"},
+                            ],
+                            max_completion_tokens=200,
+                        ),
+                        timeout=config.LLM_TIMEOUT
                     )
                     reply = interp.choices[0].message.content.strip()
             except (json.JSONDecodeError, Exception):
