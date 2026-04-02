@@ -1,49 +1,49 @@
 # Skill: Git Operations
 
-## Mục đích
-Hướng dẫn CoderX sử dụng Git an toàn — tự động hóa các thao tác thông thường, hỏi xác nhận khi có rủi ro.
+## Purpose
+Guide CoderX to use Git safely — automating routine operations, and asking for confirmation when there is risk.
 
-## Phân loại theo rủi ro
+## Risk Classification
 
-### ✅ TỰ ĐỘNG — Không cần hỏi
-Các lệnh này an toàn, bot tự chạy:
+### ✅ AUTOMATIC — No confirmation needed
+These commands are safe; the bot runs them autonomously:
 ```bash
 git status
 git log --oneline -10
 git diff
 git diff --staged
-git add <specific-files>     # chỉ add files đã được chỉ định rõ
-git commit -m "<message>"   # sau khi đã add
-git pull                     # fast-forward pull
+git add <specific-files>      # only add explicitly specified files
+git commit -m "<message>"    # after files have been staged
+git pull                      # fast-forward pull
 git stash
 git stash pop
-git branch                   # list branches
+git branch                    # list branches
 git checkout <existing-branch>
 git fetch
 ```
 
-### ⚠️ HỎI TRƯỚC — Cần confirm từ user
-Các lệnh có thể gây mất data hoặc ảnh hưởng remote:
+### ⚠️ ASK FIRST — Requires user confirmation
+Commands that may cause data loss or affect the remote:
 ```bash
-git push                     # ⚠️ Hỏi: "Push to origin/branch?"
-git push --force             # ⚠️ Hỏi: "Force push — có chắc không?"
-git reset --hard             # ⚠️ Hỏi: "Xóa tất cả uncommitted changes?"
-git clean -fd                # ⚠️ Hỏi: "Xóa untracked files?"
-git branch -D <branch>       # ⚠️ Hỏi: "Xóa branch <name>?"
-git rebase                   # ⚠️ Hỏi: "Rebase onto <branch>?"
-git merge <branch>           # ⚠️ Hỏi nếu không phải feature → main
+git push                      # ⚠️ Ask: "Push to origin/branch?"
+git push --force              # ⚠️ Ask: "Force push — are you sure?"
+git reset --hard              # ⚠️ Ask: "Discard all uncommitted changes?"
+git clean -fd                 # ⚠️ Ask: "Delete untracked files?"
+git branch -D <branch>        # ⚠️ Ask: "Delete branch <name>?"
+git rebase                    # ⚠️ Ask: "Rebase onto <branch>?"
+git merge <branch>            # ⚠️ Ask if not feature → main
 ```
 
-### 🚫 KHÔNG BAO GIỜ TỰ ĐỘNG
+### 🚫 NEVER AUTOMATE
 ```bash
-git push --force-with-lease  # vẫn cần confirm
-git reset --hard HEAD~N      # nguy hiểm — xóa commits
-git reflog expire            # xóa history
+git push --force-with-lease   # still requires confirmation
+git reset --hard HEAD~N       # dangerous — deletes commits
+git reflog expire             # deletes history
 ```
 
 ## Commit Message Convention
 
-Dùng Conventional Commits:
+Use Conventional Commits:
 ```
 feat: add user authentication
 fix: resolve null pointer in order processing
@@ -53,36 +53,36 @@ docs: update API documentation
 chore: update dependencies
 ```
 
-## Workflow khi cần Git
+## Git Workflow
 
-### 1. Sau khi code xong một tính năng
+### 1. After finishing a feature
 ```
 shell: git status
 shell: git add src/features/new-feature/
 shell: git commit -m "feat: implement <feature-name>"
-[HỎI USER]: git push origin feature/new-feature?
+[ASK USER]: git push origin feature/new-feature?
 ```
 
-### 2. Trước khi bắt đầu task mới
+### 2. Before starting a new task
 ```
-shell: git status  ← check có uncommitted changes không
-shell: git pull    ← update code mới nhất
+shell: git status  ← check for uncommitted changes
+shell: git pull    ← update to latest code
 ```
 
-### 3. Khi có conflict
-→ Báo user, không tự resolve conflict phức tạp
+### 3. When there is a conflict
+→ Report to user. Do not attempt to self-resolve complex conflicts.
 
-## Khi bot cần hỏi user
-Gửi message Telegram theo format:
+## When the bot needs to ask the user
+Send a Telegram message in this format:
 ```
 ⚠️ [GIT CONFIRM]
-Lệnh: `git push origin main`
-Lý do: Đẩy code lên remote branch main
-Có tiếp tục không? Trả lời YES/NO
+Command: `git push origin main`
+Reason: Pushing code to remote main branch
+Continue? Reply YES/NO
 ```
-Bot đợi tối đa 5 phút. Nếu không có trả lời → SKIP git step, báo cáo.
+Bot waits up to 5 minutes. If no reply → SKIP git step and report.
 
-## Khi tạo Git prompt cho CoderX
+## Git Prompt Template for CoderX
 ```
 Git operations for this task:
 

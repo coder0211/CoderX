@@ -1,41 +1,41 @@
 # Skill: Coding (Native)
 
-## Mục đích
-Hướng dẫn CoderX tự mình viết code, sửa lỗi và hoàn thiện tính năng bằng cách sử dụng các công cụ có sẵn (MCP Filesystem, Shell).
+## Purpose
+Guide CoderX to independently write code, fix bugs, and complete features using available tools (MCP Filesystem, Shell).
 
-## Nguyên tắc hoạt động
-Bạn không gửi yêu cầu cho agent khác. Bạn là người trực tiếp thực thi.
+## Operating Principle
+You do not delegate to another agent. You are the one executing directly.
 
-### Quy trình 4 bước: READ → PLAN → WRITE → VERIFY
+### 4-Step Process: READ → PLAN → WRITE → VERIFY
 
-#### 1. READ (Tìm hiểu Context)
-- Luôn dùng `mcp` -> `filesystem/list_dir` để xem cấu trúc thư mục.
-- Dùng `mcp` -> `filesystem/read_file` để đọc nội dung các file liên quan (models, logic hiện tại). 
-- **Không bao giờ sửa file khi chưa đọc nó.**
+#### 1. READ (Understand Context)
+- Always use `mcp` → `filesystem/list_dir` to view the directory structure.
+- Use `mcp` → `filesystem/read_file` to read the content of relevant files (models, existing logic).
+- **Never edit a file without reading it first.**
 
-#### 2. PLAN (Lên phương án)
-- Xác định cụ thể function/class/logic cần thay đổi.
-- Đảm bảo tuân thủ coding style của project.
+#### 2. PLAN (Formulate approach)
+- Identify the specific function/class/logic that needs to change.
+- Ensure compliance with the project's coding style.
 
-#### 3. WRITE (Thực thi)
-- Dùng `mcp` -> `filesystem/write_file` để tạo mới hoặc cập nhật file.
-- Khi cập nhật, hãy viết toàn bộ nội dung file mới (full replacements) để tránh lỗi cú pháp.
-- handle errors và edge cases ngay trong code.
+#### 3. WRITE (Execute)
+- Use `mcp` → `filesystem/write_file` to create new or update existing files.
+- When updating, write the entire new file content (full replacement) to avoid syntax errors.
+- Handle errors and edge cases directly in the code.
 
-#### 4. VERIFY (Kiểm chứng)
-- Dùng `shell` để chạy lệnh kiểm tra:
-  - `pytest` / `npm test`: Chạy unit tests.
-  - `python script_name.py`: Chạy thử script.
-  - `mypy` / `eslint`: Kiểm tra lỗi tĩnh.
-- Nếu VERIFY thất bại -> Quay lại bước 1 để phân tích lỗi và fix.
+#### 4. VERIFY (Validate)
+- Use `shell` to run validation commands:
+  - `pytest` / `npm test`: Run unit tests.
+  - `python script_name.py`: Run the script directly.
+  - `mypy` / `eslint`: Check for static errors.
+- If VERIFY fails → return to step 1 to analyze the error and fix.
 
-## Gợi ý cho Action Prompt (Internal Thought)
-Khi bạn thực hiện một action `mcp` hoặc `shell`, hãy mô tả rõ:
-- "Đang đọc nội dung file config.py để kiểm tra settings..."
-- "Cập nhật logic xử lý lỗi trong api/routes.py..."
-- "Chạy bộ test để đảm bảo feature mới không làm hỏng logic cũ..."
+## Action Prompt Hints (Internal Thought)
+When performing an `mcp` or `shell` action, clearly describe what you're doing:
+- "Reading the content of config.py to check settings..."
+- "Updating error handling logic in api/routes.py..."
+- "Running the test suite to ensure the new feature doesn't break existing logic..."
 
-## Tiêu chuẩn Hoàn thành
-- Code đã được ghi xuống đĩa thành công.
-- Các lệnh check/test ở bước VERIFY trả về kết quả thành công (exit code 0).
-- Không để lại logic thừa hoặc file rác.
+## Completion Criteria
+- Code has been successfully written to disk.
+- Validation/test commands from VERIFY return a successful result (exit code 0).
+- No leftover logic or junk files remain.

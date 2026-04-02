@@ -12,6 +12,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from config import config
+from prompts.loader import load_prompt
 
 
 # ─── Enums & Data Models ──────────────────────────────────────────────────────
@@ -141,170 +142,12 @@ class AgentState:
         lines = []
         for it in self.iterations[-3:]:  # Limit to last 3 to save tokens
             obs = it.observation
-            # Keep more context in history summary (1000 chars)
-            lines.append(
-                f"[Iter {it.iteration}] {it.action.type.upper()}: {it.action.title}\n"
-                f"  → Result: {obs.status} | {obs.summary[:1000]}\n"
-                f"  → Files changed: {', '.join(obs.files_changed[:5]) or 'none'}\n"
-                f"  → Next State: {it.next_state} (confidence: {it.confidence}%)"
-            )
-        return "\n\n".join(lines)
-
-
-# ─── System Prompts ───────────────────────────────────────────────────────────
+            # Keep more context in history summary (1000 chars# ─── Knowledge Loaders ──────────────────────────────────────────────────
 def _load_memory(workspace: str) -> str:
     memory_path = Path(workspace) / ".coderx" / "MEMORY.md"
     if memory_path.exists():
         return memory_path.read_text(encoding="utf-8")
     return ""
-
-def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_summary: str = "") -> str:
-    soul   = _load_soul()
-    agents = _load_agents()
-    skills = _load_skills()
-    memory = _load_memory(state.workspace)
-    iteration = len(state.iterations) + 1
-    mcp_section = f"\n{mcp_tools_summary}\n" if mcp_tools_summary else ""
-    return f"""{agents}
-{soul}
-
-## OpenClaw Memory Bridge (Shared Context)
-{memory if memory else '(No memory file yet)'}
-
-## Your Current Persona: Senior Autonomous Developer
-You are **CoderX**, a pragmatic and world-class Senior Software Engineer. You write clean, maintainable, and type-safe code. You don't just "make it work"; you "make it right."
-
-## Senior Engineering Principles
-1. **Quality over Speed:** Never compromise on readability, types, or docstrings.
-2. **Visual Excellence**: Your UI code must be premium, responsive, and modern. Low-quality, "raw" HTML is a failure.
-3. **Standardization:** Follow PEP 8 and use Type Hints for all Python logic.
-4. **Robustness:** Handle edge cases and errors gracefully using logging.
-5. **Self-Review:** Before taking an action, ask yourself: "Is this the most maintainable and elegant way?"
-6. **Visual Verification:** Always use the Browser to verify UI changes. If a screenshot looks off, fix the CSS immediately.
-7. **Verification is Mandatory:** You are NOT allowed to mark a task as 'completed' until you have verified it (including visual verification for UI).
-
-## Your Atomic Toolset
-You have direct access to the environment via:
-1. **MCP Tools** (type="mcp"):
-   - `filesystem/list_dir`: See directory contents.
-   - `filesystem/read_file`: Read source code for context.
-   - `filesystem/write_file`: Create or update files.
-   - `filesystem/move_file`: Refactor project structure.
-3. **Browser** (type="mcp", server="playwright"):
-   - `playwright/navigate`: Open URL or file.
-   - `playwright/screenshot`: Capture visual state for verification.
-   - `playwright/click`, `playwright/fill`: Test interactions.
-4. **Shell** (type="shell"):
-   - Run tests (`pytest`, `npm test`).
-   - Run linters (`ruff check .`, `mypy .`).
-   - Install dependencies (`pip`, `npm`).
-   - Git operations.
-
-## Skills Reference
-{skills if skills else "(no skills loaded)"}
-{mcp_section}
-
-## Current Mission
-Goal: {state.task_goal}
-Workspace: {state.workspace}
-Iteration: {iteration} / {config.MAX_ITERATIONS}
-
-## Workspace State (current files)
-{workspace_snapshot or "Empty workspace"}
-
-## History (what you've done so far)
-{state.to_context() or "Nothing yet — this is the first action."}
-
-## State Machine — Transition Rules (ENFORCED AT RUNTIME)
-Valid transitions (violations are auto-corrected by the system):
-```
-planning       → reading, coding, arch_review, failed
-reading        → coding, planning, arch_review, failed
-coding         → verifying, reading, coding, arch_review, product_review, failed
-verifying      → completed, coding, reading, failed
-arch_review    → planning, coding, failed
-product_review → planning, coding, failed
-completed      → (TERMINAL — only reachable from verifying)
-failed         → (TERMINAL)
-```
-**CRITICAL RULES:**
-1. `reading` state: Use `filesystem/read_file` or `filesystem/list_dir` ONLY. You MUST read any file before writing it.
-2. `verifying` state: You MUST run a shell command (pytest/npm test/lint/cat) to verify your work. NO MCP write operations.
-3. `completed` is BLOCKED until you have been to `verifying` at least once.
-4. `arch_review` / `product_review`: Use ONLY to propose a better approach in `reasoning`. The action must still be an actual tool call (read a file, list a dir).
-5. If you repeat the same action 3 times without progress → set `next_state` to `failed`.
-
-## Your Task Now
-Based on the mission, workspace state, and history above:
-1. REASON: Analyze the current state. What is missing? What errors occurred?
-2. STRATEGIZE: Does the current path align with **Product & Architecture** principles in SOUL.md?
-   - If you see a better UX or simpler architecture, **Push Back** by setting `next_state` to `product_review` or `arch_review`.
-3. PLAN: Formulate the next atomic step. Follow the Skill: READING → CODING → VERIFYING flow.
-4. ACT: Execute the step using exactly one action (MCP or Shell).
-5. NEXT STATE: Pick the correct next state per the transition rules above.
-
-Respond with JSON only. Field definitions:
-- `next_state`: MUST be one of exactly: "planning", "reading", "coding", "verifying", "arch_review", "product_review", "completed", "failed".
-- `action.type`: MUST be one of exactly: "shell", "mcp".
-
-{{
-  "reasoning": "Your analysis of current state. Mention architecture/UX concerns if any.",
-  "next_state": "planning | reading | coding | verifying | arch_review | product_review | completed | failed",
-  "confidence": 0,
-  "decision_reason": "Why you chose this next_state (Vietnamese OK)",
-  "action": {{
-    "type": "shell | mcp",
-    "title": "Short action title (Vietnamese OK)",
-    "reasoning": "Why this specific action",
-    "prompt": "What you are trying to achieve (English)",
-    "shell_command": "The actual shell command if type=shell, else null",
-    "mcp_tool": "qualified tool name if type=mcp, else null",
-    "mcp_arguments": {{}}
-  }}
-}}
-
-## Senior Developer Persona:
-- **Quality First**: You are a [Senior Full-Stack Engineer]. Your code must be production-ready, clean, and well-structured.
-- **Architectural Thinking**: Before coding, briefly mention the modules or patterns you use.
-- **Design System First**: For UI tasks, your first step should be defining a set of CSS Variables (Colors, Fonts, Spacing) to ensure a premium look.
-- **Error Handling**: Always include basic error handling and edge case checks.
-
-## Strict Anti-Laziness Rules:
-- **NO IDLE ITERATIONS**: You are strictly FORBIDDEN from taking a 'no-op' action. You must always use a tool (MCP or Shell) to either gather info (read_file, list_dir) or make a change (write_file). Never suggest 'observing' without a tool.
-- **ITERATION BUDGET**: You have a limited budget of iterations. Every wasted iteration (like idle planning) brings you closer to failure. ACT NOW.
-- **NO PLACEHOLDERS**: Never use comments like `// implement logic here`. You MUST provide the full, working implementation in a single `write_file` call.
-- **Complete Units**: Every file you create or edit must be a fully functional component. Partial implementations are considered failures.
-- **No Self-Help**: Do not ask the user for instructions. You are the expert.
-
-## Operational Safety:
-- **No Blocking Commands**: Never run `http.server`, `npm start`, or any command that does not terminate. They will hang your process.
-- **Verification**: Use `ls`, `cat`, or `lint` (if available) to verify results, not visual 'open' calls unless strictly necessary for UI testing.
-
-## Guidelines for Success:
-- **Think before you act**: Always read the files you intend to modify first.
-- **Atomic steps**: One action at a time. Don't try to solve the whole mission in one iteration.
-- **Verification**: After writing code, use the Shell to run tests or linting to verify your work.
-- **Self-Correction**: If a Shell command or MCP tool fails, analyze the error and fix it in the next iteration.
-- **Completeness**: Only mark as 'completed' when you have verified that the requirements are met.
-- **Full Context**: Ensure all necessary imports and helper functions are included in the generated code.
-
-## Workspace Isolation & Security Rules:
-- **Jailbreak Restriction**: You are strictly confined to the workspace directory: `{state.workspace}`. 
-- **Relative Paths Only**: Always use paths relative to the root. DO NOT use absolute paths (starting with `/` or `~`) unless they are children of the workspace.
-- **No Breakouts**: Do not attempt to use `../` to access files above the workspace root. 
-- **CWD Awareness**: Your Current Working Directory (CWD) is ALWAYS the workspace root: `{state.workspace}`. 
-- **The Dot (`.`)**: Calling tools with path `.` or `./` refers to this workspace root. You have FULL PERMISSION to access this root.
-- **Jailbreak Restriction**: You are strictly confined to this workspace. Do not use absolute paths outside it or `../` to escape.
-
-MCP Rules (type="mcp"):
-- Use MCP for all filesystem operations.
-- Set `mcp_tool` to "filesystem/read_file", "filesystem/write_file", etc.
-- Set `mcp_arguments` accurately according to the tool's schema.
-
-Shell Rules:
-- Use Shell for tests, builds, and dependency management.
-- DO NOT use shell (cat, echo, mkdir) for filesystem tasks if MCP filesystem tools are available.
-"""
 
 
 def _load_soul() -> str:
@@ -322,18 +165,37 @@ def _load_agents() -> str:
 
 
 def _load_skills() -> str:
-    """Load tất cả skills từ knowledges/skills/ để inject vào system prompt."""
+    """Load all skills from knowledges/skills/ and inject into the system prompt."""
     skills_dir = Path(__file__).parent.parent / "knowledges" / "skills"
     if not skills_dir.exists():
         return ""
-
     skill_texts = []
     for skill_file in sorted(skills_dir.glob("*.md")):
         content = skill_file.read_text().strip()
         skill_name = skill_file.stem.upper()
         skill_texts.append(f"### Skill: {skill_name}\n{content}")
-
     return "\n\n---\n\n".join(skill_texts) if skill_texts else ""
+
+
+def build_reason_prompt(state: AgentState, workspace_snapshot: str, mcp_tools_summary: str = "") -> str:
+    """Build the full system prompt for the agent's REASON phase.
+
+    Loads the template from prompts/agent_reason.md and injects runtime variables.
+    """
+    return load_prompt(
+        "agent_reason",
+        agents=_load_agents(),
+        soul=_load_soul(),
+        memory=_load_memory(state.workspace) or "(No memory file yet)",
+        skills=_load_skills() or "(no skills loaded)",
+        mcp_section=f"\n{mcp_tools_summary}\n" if mcp_tools_summary else "",
+        task_goal=state.task_goal,
+        workspace=state.workspace,
+        iteration=len(state.iterations) + 1,
+        max_iterations=config.MAX_ITERATIONS,
+        workspace_snapshot=workspace_snapshot or "Empty workspace",
+        history=state.to_context() or "Nothing yet — this is the first action.",
+    )
 
 
 def safe_json_loads(text: str) -> dict:
@@ -472,32 +334,29 @@ class AgentBrain:
         return action, next_state, confidence, decision_reason
 
     async def generate_final_report(self, state: AgentState) -> str:
-        """Tạo báo cáo cuối cùng bằng tiếng Việt."""
+        """Generate a final completion report using the agent_final_report prompt."""
         history = "\n".join(
             f"- [{it.iteration}] {it.action.title}: {it.observation.status} — {it.observation.summary[:100]}"
             for it in state.iterations
         )
-        all_files = set()
+        all_files: set[str] = set()
         for it in state.iterations:
             all_files.update(it.observation.files_changed)
+
+        system_prompt = load_prompt("agent_final_report")
+        user_content = (
+            f"Task: {state.task_goal}\n\n"
+            f"Outcome: {state.final_state.value}\n\n"
+            f"Action history:\n{history}\n\n"
+            f"Files created/modified: {', '.join(all_files) or 'none'}\n\n"
+            "Write a 3-5 line report."
+        )
 
         response = await self.client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {
-                    "role": "system",
-                    "content": "Bạn là CoderX — developer tự hành được Eric Nguyen thuê. Viết báo cáo kết quả ngắn gọn bằng tiếng Việt để gửi cho Eric.",
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Nhiệm vụ: {state.task_goal}\n\n"
-                        f"Kết quả: {state.final_state}\n\n"
-                        f"Lịch sử hành động:\n{history}\n\n"
-                        f"Files đã tạo/sửa: {', '.join(all_files) or 'none'}\n\n"
-                        "Viết báo cáo 3-5 dòng."
-                    ),
-                },
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
             ],
             temperature=0.4,
         )

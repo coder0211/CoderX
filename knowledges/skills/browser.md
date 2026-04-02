@@ -1,20 +1,80 @@
-# Browser Verification Skill (Playwright)
+# Skill: Browser Verification (Playwright)
 
-You have access to a real browser via Playwright. Use this to verify UI/UX and visual quality.
+## Purpose
+Use Playwright to visually inspect UI/UX results after writing HTML/CSS/JS.
 
-## Core Capabilities
-- **Navigation**: `playwright/navigate` to open local HTML files or external URLs.
-- **Visuals**: `playwright/screenshot` to "see" what you've built.
-- **Interactions**: `playwright/click`, `playwright/fill`, `playwright/type` to test flows.
-- **Analysis**: `playwright/inspect_element` to debug layout issues.
+## Golden Rule
+> **Take a screenshot after every CSS/HTML change. If it looks bad → fix it immediately, don't wait.**
 
-## Best Practices for "Premium" UI
-1. **Always Screenshot**: After writing CSS/HTML, take a screenshot of the page.
-2. **Check Responsiveness**: Use different viewport sizes to ensure the design scales.
-3. **Verify Animations**: Observe if transitions are smooth (mentally, by checking if selectors are correct).
-4. **Contrast & Type**: Use `screenshot` to verify that text is readable and colors are harmonious.
+---
 
-## Testing Local Files
-To test a local file (e.g., `index.html` in your workspace), use the absolute path:
-`playwright/navigate({"url": "file:///Users/hoa.nguyen3/Documents/our/CoderX/index.html"})`
-(Replace with the actual workspace path).
+## Core Tools
+
+```
+playwright/navigate   — Open a URL or local file
+playwright/screenshot — Capture a screenshot to "see" the interface
+playwright/click      — Test interactive elements
+playwright/fill       — Test form inputs
+playwright/evaluate   — Run JavaScript in the browser context
+```
+
+---
+
+## Opening Local Files Correctly
+
+To test an HTML file in the workspace, use the absolute path with the `file://` protocol:
+
+```json
+{
+  "mcp_tool": "playwright/navigate",
+  "mcp_arguments": {
+    "url": "file://{workspace}/index.html"
+  }
+}
+```
+
+> ⚠️ Replace `{workspace}` with the absolute path of the current workspace (available in the system prompt).
+
+---
+
+## Visual Verification Process
+
+### 1. After writing HTML/CSS (in VERIFYING state)
+```
+navigate → screenshot → analyze → fix if needed
+```
+
+### 2. Checklist when reviewing a screenshot
+- [ ] Is the layout correct? (no broken elements, no overflow)
+- [ ] Is text readable? (sufficient contrast, fonts loaded)
+- [ ] Spacing appropriate? (not too cramped or too sparse)
+- [ ] Responsive? (if needed, test different viewports)
+- [ ] Colors harmonious? (not jarring or clashing)
+
+### 3. If the screenshot looks bad
+Return to `coding` state:
+- Fix CSS immediately — do not leave "ugly but functional" code
+- Priority: layout → typography → colors → animations
+
+---
+
+## Testing Interactions
+
+```json
+// Click a button
+{ "mcp_tool": "playwright/click", "mcp_arguments": { "selector": "#submit-btn" } }
+
+// Fill a form field
+{ "mcp_tool": "playwright/fill", "mcp_arguments": { "selector": "#email-input", "value": "test@example.com" } }
+
+// Check for JavaScript console errors
+{ "mcp_tool": "playwright/evaluate", "mcp_arguments": { "expression": "window.__errors || []" } }
+```
+
+---
+
+## When to use the Browser skill
+- ✅ After writing or editing HTML, CSS, or JS
+- ✅ When verifying a UI task
+- ✅ When testing a user flow (form submit, button click)
+- ❌ Not needed for Python/backend-only tasks

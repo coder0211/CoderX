@@ -1,6 +1,6 @@
 """
 CoderX — ChatGPT Task Planner
-"Tech Lead" — phân tích task, chia thành steps nhỏ cho Native Agent thực thi
+Senior Tech Lead: analyzes tasks and breaks them into discrete steps for the AutonomousAgent to execute.
 """
 import json
 from dataclasses import dataclass, field
@@ -10,6 +10,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 from config import config
+from prompts.loader import load_prompt
 
 
 class StepType(str, Enum):
@@ -51,38 +52,7 @@ class ExecutionPlan:
         self.total_steps = len(self.steps)
 
 
-SYSTEM_PROMPT = """Bạn là một Senior Software Architect kiêm Tech Lead & Product Manager.
-Khi nhận yêu cầu từ người dùng, nhiệm vụ của bạn là:
 
-1. **Phân tích Chiến lược (Strategy Analysis)**: Đánh giá yêu cầu về mặt UX và Kiến trúc. 
-   - Nếu yêu cầu làm UI quá phức tạp -> Đề xuất phương án tối giản.
-   - Nếu yêu cầu về tech gây lãng phí/over-engineering -> Đề xuất giải pháp bền vững.
-2. **Chia nhỏ** thành các bước (steps) độc lập, rõ ràng.
-3. **Tiêu chuẩn Senior**: Các bước coding PHẢI bao gồm viết Type Hints và Docstrings.
-4. **Quy trình bắt buộc**: Mỗi khi có code mới, PHẢI có bước chạy linter (`ruff check`, `mypy`) và viết test (`pytest`).
-5. **Refactor**: Luôn có 1 bước review/refactor sau khi code đã chạy được.
-6. **Không viết tắt**: Các bước coding PHẢI yêu cầu viết toàn bộ nội dung file (Full File), không được phép dùng placeholder.
-7. **Thiết kế & Thẩm mỹ (UI/UX)**: Đối với các task liên quan đến giao diện (Landing page, Dashboard,...), BẮT BUỘC phải có một bước khởi đầu để thiết kế "Design System" (CSS Variables, Fonts, Spacing) trước khi viết code giao diện chi tiết.
-
-Quy tắc:
-- Step type: code | modify | test | fix | review | refactor | docs | shell
-- **BẮT BUỘC**: Mỗi step phải có ID duy nhất (tăng dần từ 1) và Title mô tả ngắn gọn.
-- Luôn ưu tiên dùng `test` step để verify.
-- Trả về JSON format (không thêm text khác).
-
-{
-  "strategy_analysis": "Phân tích Pro/Con về UX và Architecture của yêu cầu này (Tiếng Việt)",
-  "task_summary": "Mô tả ngắn gọn task",
-  "workspace": "...",
-  "steps": [
-    {
-      "id": 1,
-      "type": "code",
-      "title": "Tên bước",
-      "prompt": "Hướng dẫn chi tiết..."
-    }
-  ]
-}"""
 
 
 def safe_json_loads(text: str) -> dict:
@@ -131,12 +101,15 @@ class TaskPlanner:
         if not context:
             context = self._load_memory(workspace)
 
-        system_prompt = f"{self._agents}\n\n{SYSTEM_PROMPT}\n\n## Your Current Persona: Orchestrator (OpenClaw Style)\nYou are currently acting as the **Orchestrator**. Your goal is to map out the strategy for the team."
-        
-        user_content = f"Workspace hiện tại: {workspace}\n\n"
+        system_prompt = load_prompt("planner_system") + (
+            f"\n\n{self._agents}\n\n## Your Current Persona: Orchestrator (OpenClaw Style)\n"
+            "You are currently acting as the **Orchestrator**. Your goal is to map out the strategy for the team."
+        )
+
+        user_content = f"Workspace: {workspace}\n\n"
         if context:
             user_content += f"Context (Long-Term Memory):\n{context}\n\n"
-        user_content += f"Yêu cầu: {user_request}"
+        user_content += f"Task: {user_request}"
 
         self.conversation_history.append({"role": "user", "content": user_content})
 
@@ -182,7 +155,7 @@ class TaskPlanner:
         response = await self.client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": f"{self._agents}\n\n{SYSTEM_PROMPT}\n\n## Your Current Persona: Orchestrator (Strategy Review Mode)"},
+                {"role": "system", "content": review_system},
                 *self.conversation_history,
                 {"role": "user", "content": user_content},
             ],
@@ -198,19 +171,19 @@ class TaskPlanner:
         raw = response.choices[0].message.content
         data = safe_json_loads(raw)
         
-        # Merge các bước mới vào plan hiện tại
+        # Merge new steps into the existing plan
         new_steps_data = data.get("steps", [])
         new_steps = []
-        
-        # Giữ lại các bước đã xong
+
+        # Keep completed steps
         for s in plan.steps:
-            if s.id <= latest_result['id']:
+            if s.id <= latest_result["id"]:
                 new_steps.append(s)
-        
-        # Thêm các bước mới/điều chỉnh
+
+        # Add new/adjusted steps
         for s_data in new_steps_data:
             s_id = s_data.get("id")
-            if s_id > latest_result['id']:
+            if s_id > latest_result["id"]:
                 new_steps.append(self._parse_step(s_data))
         
         plan.steps = new_steps
@@ -241,21 +214,18 @@ class TaskPlanner:
             for r in step_results
         )
 
+        system_prompt = load_prompt("planner_summarize")
+        user_content = (
+            f"Task: {plan.task_summary}\n\n"
+            f"Step results:\n{results_text}\n\n"
+            "Write a concise 3-5 line summary report."
+        )
+
         response = await self.client.chat.completions.create(
             model=config.OPENAI_MODEL,
             messages=[
-                {
-                    "role": "system",
-                    "content": "Bạn là Tech Lead. Tóm tắt kết quả công việc bằng tiếng Việt, ngắn gọn, rõ ràng.",
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Task: {plan.task_summary}\n\n"
-                        f"Kết quả từng step:\n{results_text}\n\n"
-                        "Viết báo cáo tổng kết ngắn gọn (3-5 dòng)."
-                    ),
-                },
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
             ],
             temperature=0.5,
         )

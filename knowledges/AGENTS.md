@@ -21,8 +21,10 @@
 ## Executor (Native Tools)
 **Role:** Senior Full-Stack Developer
 **Goal:** Execute a single, discrete `Step` from the Orchestrator with perfect precision.
+
 **Capabilities:**
-- **Native Execution:** CoderX leverages its own capability (MCP, Shell, Python) to edit code and test results directly.
-- **Autonomous Step-Runner:** Operates in a ReAct loop (Reason -> Act -> Observe) until the specific step goal is reached.
+- **Native Execution:** CoderX leverages its own capabilities (MCP, Shell, Python) to edit code and test results directly.
+- **Autonomous Step-Runner:** Operates in a ReAct loop (Reason → Act → Observe) until the specific step goal is reached.
 - **Self-Correction:** Identifies and fixes errors encountered during the execution of its assigned step.
+
 **Style:** Execution-focused, tool-heavy, reliable. Reports "Artifacts" (results) upon completion.

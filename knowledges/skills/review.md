@@ -1,48 +1,48 @@
 # Skill: Code Review
 
-## Mục đích
-Hướng dẫn CoderX review code một cách có hệ thống — tìm bugs, security issues, và cải thiện chất lượng.
+## Purpose
+Guide CoderX to review code systematically — finding bugs, security issues, and improving quality.
 
-## Checklist Review
+## Review Checklist
 
 ### 1. Correctness
-- [ ] Logic đúng với yêu cầu?
-- [ ] Edge cases được handle?
-- [ ] Error handling đầy đủ?
-- [ ] Không có off-by-one errors?
+- [ ] Does the logic match the requirements?
+- [ ] Are edge cases handled?
+- [ ] Is error handling complete?
+- [ ] No off-by-one errors?
 
 ### 2. Security
 - [ ] Input validation / sanitization?
 - [ ] SQL injection / XSS / CSRF risks?
-- [ ] Secrets không hardcode trong code?
-- [ ] Auth/Authorization đúng?
+- [ ] No secrets hardcoded in the code?
+- [ ] Auth/Authorization correct?
 
 ### 3. Performance
 - [ ] N+1 query issues?
 - [ ] Unnecessary loops / computations?
 - [ ] Memory leaks?
-- [ ] Missing indexes (database)?
+- [ ] Missing database indexes?
 
 ### 4. Code Quality
-- [ ] Naming rõ ràng, không abbreviation khó hiểu?
-- [ ] Functions đủ nhỏ, single responsibility?
-- [ ] Duplication — có thể extract không?
-- [ ] Dead code cần xóa?
-- [ ] Comments ở những chỗ cần thiết?
+- [ ] Naming is clear, no confusing abbreviations?
+- [ ] Functions are small enough, single responsibility?
+- [ ] Duplication — can it be extracted?
+- [ ] Dead code to remove?
+- [ ] Comments where necessary?
 
 ### 5. Tests
-- [ ] Có unit tests?
-- [ ] Test coverage đủ cho happy path và edge cases?
-- [ ] Tests có chạy pass không?
+- [ ] Are there unit tests?
+- [ ] Test coverage sufficient for happy path and edge cases?
+- [ ] Do the tests pass?
 
-## Khi tạo Review prompt
+## Review Prompt Template
 ```
 Review the following files for bugs, security issues, and code quality:
 [list files]
 
 Focus on:
 1. Logic errors and edge cases
-2. Security vulnerabilities  
+2. Security vulnerabilities
 3. Performance issues
 4. Code quality and maintainability
 
@@ -59,12 +59,12 @@ Then:
 When done: create `.coderx/step_{id}_done.json`
 ```
 
-## Output mong đợi
-- File `.coderx/review_report.md` với danh sách issues
-- Các CRITICAL/HIGH issues được fix trực tiếp
-- Summary số issues theo severity
+## Expected Output
+- File `.coderx/review_report.md` with a list of issues
+- CRITICAL/HIGH issues fixed directly
+- Summary of issue counts by severity
 
-## Khi nào dùng
-- Sau khi code một tính năng mới
-- Trước khi merge / commit
-- Khi user yêu cầu review cụ thể
+## When to use
+- After coding a new feature
+- Before merging / committing
+- When the user explicitly requests a review

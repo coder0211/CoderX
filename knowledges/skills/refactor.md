@@ -1,19 +1,19 @@
 # Skill: Refactoring
 
-## Mục đích
-Hướng dẫn CoderX refactor code — cải thiện cấu trúc mà không thay đổi behavior.
+## Purpose
+Guide CoderX to refactor code — improving structure without changing behavior.
 
-## Nguyên tắc vàng
-> **Không bao giờ thay đổi behavior khi refactor.**
-> Tests phải pass trước và sau khi refactor.
+## Golden Rule
+> **Never change behavior when refactoring.**
+> Tests must pass before and after the refactor.
 
-## Khi nào Refactor
+## When to Refactor
 - Code smell: function > 50 lines, class > 300 lines
-- Duplication: cùng logic xuất hiện 3+ lần
-- God class: 1 class làm quá nhiều thứ
-- Magic numbers: số/string không có tên
-- Deep nesting: if/for lồng > 3 cấp
-- Long parameter list: function nhận > 4 params
+- Duplication: same logic appears 3+ times
+- God class: 1 class doing too many things
+- Magic numbers: unnamed numbers/strings
+- Deep nesting: if/for nesting > 3 levels
+- Long parameter list: function takes > 4 params
 
 ## Refactoring Patterns
 
@@ -25,7 +25,7 @@ def process_order(order):
     # 20 lines of calculation
     # 15 lines of notification
 
-# After  
+# After
 def process_order(order):
     validate_order(order)
     total = calculate_total(order)
@@ -51,7 +51,7 @@ notifier = NotifierFactory.create(type)
 notifier.send()
 ```
 
-## Khi tạo Refactor prompt
+## Refactor Prompt Template
 ```
 Refactor the following files to improve code quality:
 [list files]
@@ -73,8 +73,8 @@ Steps:
 When done: create `.coderx/step_{id}_done.json`
 ```
 
-## Thứ tự ưu tiên
-1. Fix bugs trước khi refactor
-2. Viết tests trước khi refactor (nếu chưa có)
-3. Refactor từng phần nhỏ, commit thường xuyên
-4. Review sau khi refactor
+## Priority Order
+1. Fix bugs before refactoring
+2. Write tests before refactoring (if none exist)
+3. Refactor in small pieces, commit frequently
+4. Review after refactoring

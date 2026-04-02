@@ -1,16 +1,16 @@
 # Skill: Project Onboarding
 
-## Mục đích
-Hướng dẫn CoderX tự động "khám phá" và hiểu kiến trúc của một repository mới mà không cần user giải thích.
+## Purpose
+Guide CoderX to autonomously "discover" and understand the architecture of a new repository without needing the user to explain it.
 
-## Quy trình Onboarding
+## Onboarding Process
 
-### 1. Khám phá tổng quan (Snapshot)
-- Bot tự liệt kê file tree cấp 1-2.
-- Nhận diện các file "key" (README.md, package.json, requirements.txt, .env.example, Makefile, docker-compose.yml).
+### 1. High-level discovery (Snapshot)
+- The bot lists the file tree at depth 1-2.
+- Identifies "key" files (README.md, package.json, requirements.txt, .env.example, Makefile, docker-compose.yml).
 
-### 2. Phân tích kiến trúc thông qua Native Tools
-Giao nhiệm vụ cho CoderX với prompt:
+### 2. Architecture analysis using Native Tools
+Assign CoderX the following prompt:
 ```
 Explore this repository and analyze:
 1. Main tech stack (Language, Frameworks, DB).
@@ -21,15 +21,15 @@ Explore this repository and analyze:
 Write a comprehensive summary into `.coderx/onboarding.md`.
 ```
 
-### 3. Lưu trữ tri thức
-- File `.coderx/onboarding.md` sẽ được CoderX đọc và đưa vào context cho mọi task sau này.
+### 3. Knowledge storage
+- The file `.coderx/onboarding.md` will be read by CoderX and injected into the context for all subsequent tasks.
 
-## Khi nào chạy Onboard
-- Khi user gửi lệnh `/onboard`.
-- Khi bot phát hiện workspace mới mà chưa có folder `.coderx/`.
+## When to run Onboarding
+- When the user sends the `/onboard` command.
+- When the bot detects a new workspace that does not yet have a `.coderx/` folder.
 
-## Native Agent Instructions for Onboard
-- Sử dụng Terminal để `cat` các file config.
-- Sử dụng File tree để crawl folders.
-- Sử dụng Browser nếu cần tra cứu một config/framework lạ có trong project.
-- Output phải là Tiếng Việt hoặc Song ngữ (Anh-Việt).
+## Native Agent Instructions for Onboarding
+- Use Shell to `cat` config files.
+- Use file tree to crawl folders.
+- Use Browser if needed to look up an unfamiliar config/framework found in the project.
+- Output must be in English.

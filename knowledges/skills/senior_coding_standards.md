@@ -1,30 +1,30 @@
 # CoderX Senior Coding Standards
 
-Đây là bộ tiêu chuẩn bắt buộc cho mọi Developer Agent tại CoderX. Mục tiêu là tạo ra mã nguồn chất lượng cao, dễ bảo trì và vận hành mượt mà.
+These are mandatory standards for all Developer Agents at CoderX. The goal is to produce high-quality, maintainable code that runs smoothly.
 
-## 1. Nguyên tắc "Không Giữ Chỗ" (No Placeholders)
-- **TUYỆT ĐỐI CẤM** sử dụng các comment như `// logic goes here`, `/* TODO */`, hay `# implement later`.
-- Mọi file được tạo hoặc chỉnh sửa phải **HOÀN THIỆN** và **CHẠY ĐƯỢC NGAY**.
-- Nếu nhiệm vụ quá lớn, hãy chia nhỏ thành các module nhưng mỗi module phải đầy đủ logic của nó.
+## 1. No Placeholders Policy
+- **STRICTLY FORBIDDEN** to use comments like `// logic goes here`, `/* TODO */`, or `# implement later`.
+- Every file created or edited must be **COMPLETE** and **IMMEDIATELY RUNNABLE**.
+- If a task is too large, break it into modules — but each module must contain its complete logic.
 
-## 2. Kiến trúc & Cấu trúc (Architecture)
-- **Tách biệt mối quan tâm (Separation of Concerns)**: HTML cho cấu trúc, CSS cho giao diện, JS cho logic.
-- **Biến & Hằng số**: Đặt tên có ý nghĩa, sử dụng `const` và `let` thay vì `var`.
-- **Error Handling**: Sử dụng `try-catch` cho các thao tác rủi ro (network, file I/O).
+## 2. Architecture & Structure
+- **Separation of Concerns**: HTML for structure, CSS for presentation, JS for logic.
+- **Variables & Constants**: Use meaningful names, prefer `const` and `let` over `var`.
+- **Error Handling**: Use `try-catch` for risky operations (network, file I/O).
 
-## 3. Thẩm mỹ & UX (Visual Excellence)
-CoderX không chỉ code để chạy, mà còn code để "đẹp". Mọi giao diện web phải đạt chuẩn:
-- **Hệ thống Design Token**: Sử dụng CSS Variables cho màu sắc, khoảng cách (spacing), và typography để đảm bảo sự nhất quán.
-- **Bố cục hiện đại**: Tuyệt đối sử dụng Flexbox và Grid. Tranh bố cục "thô" hoặc dùng float/table để dàn trang.
-- **Typography cao cấp**: Luôn tích hợp Google Fonts (ví dụ: Inter, Outfit, Roboto). Tránh dùng font mặc định của trình duyệt. 
-- **Bảng màu tinh tế**: Sử dụng các bảng màu hài hòa (HSL-based), có độ tương phản cao và hỗ trợ Dark Mode nếu cần.
-- **Trải nghiệm mượt mà**: Thêm các hiệu ứng chuyển đổi (transitions) khi hover, micro-animations nhẹ nhàng, và bo góc (border-radius) hợp lý để tạo cảm giác hiện đại.
-- **Responsive là mặc định**: Giao diện phải hiển thị tốt dường như trên mọi thiết bị (Mobile First approach).
-- **Tuyệt đối không dùng HTML "trơ"**: Một senior không bao giờ viết HTML mà không có CSS đi kèm để làm nó trông chuyên nghiệp hơn.
+## 3. Visual Excellence & UX
+CoderX doesn't just code to work — it codes to **look great**. Every web interface must meet:
+- **Design Token System**: Use CSS Variables for colors, spacing, and typography to ensure consistency.
+- **Modern Layouts**: Always use Flexbox and Grid. Never use float/table for page layout.
+- **Premium Typography**: Always integrate Google Fonts (e.g., Inter, Outfit, Roboto). Avoid browser default fonts.
+- **Refined Color Palettes**: Use harmonious (HSL-based) color palettes with high contrast and Dark Mode support when needed.
+- **Smooth Experience**: Add hover transitions, subtle micro-animations, and reasonable border-radius for a modern feel.
+- **Responsive by Default**: The interface must display correctly on all devices (Mobile First approach).
+- **No bare HTML**: A senior never writes HTML without accompanying CSS to make it look professional.
 
-## 4. Kiểm soát Vận hành (Operational Safety)
-- **Chặn lệnh treo máy**: Không bao giờ chạy các lệnh interactive liên tục (`npm start`, `watch`) trong shell tool trừ khi có cơ chế nền.
-- **Normalize paths**: Luôn sử dụng đường dẫn tương đối từ gốc project để tránh lỗi "Access Denied".
+## 4. Operational Safety
+- **Block hanging commands**: Never run interactive/continuous commands (`npm start`, `watch`) in the shell tool unless there is a background mechanism.
+- **Normalize paths**: Always use project-relative paths to avoid "Access Denied" errors.
 
 ---
-*Mọi hành vi vi phạm tiêu chuẩn trên sẽ bị coi là lỗi Seniority.*
+*Any violation of the above standards is considered a Seniority failure.*
