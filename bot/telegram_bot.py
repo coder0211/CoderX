@@ -180,7 +180,18 @@ async def classify_intent(text: str, client) -> dict:
             ),
             timeout=config.INTENT_TIMEOUT
         )
-        return json.loads(response.choices[0].message.content)
+        content = response.choices[0].message.content or ""
+        if not content.strip():
+            print("⚠️ Intent classification returned empty content.")
+            return {"intent": "chat"}
+            
+        # Clean markdown code blocks if present
+        clean_content = content.replace("```json", "").replace("```", "").strip()
+        try:
+            return json.loads(clean_content)
+        except json.JSONDecodeError:
+            print(f"⚠️ Failed to parse intent JSON: {content}")
+            return {"intent": "chat"}
     except asyncio.TimeoutError:
         print(f"⚠️ Intent classification timed out after {config.INTENT_TIMEOUT}s")
         return {"intent": "chat"}
