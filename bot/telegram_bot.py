@@ -208,7 +208,7 @@ async def classify_intent(text: str, client) -> dict:
         return {"intent": "chat"}
     except Exception as e:
         log_error(f"Intent classification error: {e}")
-        return {"intent": "chat"}
+        raise
 
 
 # ─── Main unified message handler ──────────────────────────────────────────────
@@ -379,10 +379,11 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except Exception as e:
         log_error(f"Error handling chat message: {e}")
         console.print_exception()
-        if q.is_running and q.current_task:
-            await send(update, f"🔄 Đang chạy: _{q.current_task.goal}_")
-        else:
-            await send(update, "✅ Rảnh. Nói cho tôi biết bạn cần làm gì!")
+        error_str = str(e)
+        if len(error_str) > 500:
+            error_str = error_str[:500] + "..."
+            
+        await send(update, f"❌ **Gặp lỗi từ LLM hoặc Hệ thống:**\n`{error_str}`")
 
 
 # ─── Utility commands (/stop, /status, /queue, /start) ─────────────────────────
