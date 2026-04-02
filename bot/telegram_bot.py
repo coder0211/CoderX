@@ -88,6 +88,8 @@ def is_allowed(user_id: int) -> bool:
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 async def send(update: Update, text: str, parse_mode=ParseMode.MARKDOWN) -> None:
+    if not text or not text.strip():
+        text = "⚠️ (Hệ thống) Gặp lỗi phản hồi rỗng từ AI."
     log_telegram(f"[Action: SEND] Sending reply to user {update.effective_user.id}: {text[:100]}...")
     max_len = 4000
     chunks = [text[i:i + max_len] for i in range(0, len(text), max_len)]
@@ -99,6 +101,8 @@ async def send(update: Update, text: str, parse_mode=ParseMode.MARKDOWN) -> None
 
 
 async def send_to_chat(bot, chat_id: int, text: str) -> None:
+    if not text or not text.strip():
+        text = "⚠️ (Hệ thống) Gặp lỗi phản hồi rỗng từ AI."
     log_telegram(f"[Action: SEND_TO_CHAT] Sending message to chat {chat_id}: {text[:100]}...")
     max_len = 4000
     chunks = [text[i:i + max_len] for i in range(0, len(text), max_len)]
@@ -340,7 +344,10 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             ),
             timeout=config.LLM_TIMEOUT
         )
-        reply = response.choices[0].message.content.strip()
+        reply = (response.choices[0].message.content or "").strip()
+        
+        if not reply:
+            reply = "🤔 Chết, em đang bị đứng não không biết trả lời sao (AI trả rỗng). Anh thông cảm cho em hỏi lại được không?"
 
         # Kiểm tra nếu LLM muốn gọi MCP tool
         if mcp_bridge.is_ready() and reply.startswith("{"):
