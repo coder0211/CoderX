@@ -19,9 +19,9 @@ class Config:
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip("'\" ")
     # SMART_MODEL: dùng cho reasoning nặng — TaskPlanner, AgentBrain
-    SMART_MODEL: str = os.getenv("SMART_MODEL", "gpt-5-mini").strip("'\" ")
+    SMART_MODEL: str = os.getenv("SMART_MODEL", "gpt-5-mini-2025-08-07").strip("'\" ")
     # FAST_MODEL: dùng cho tác vụ đơn giản — summarize, final report, telegram chat
-    FAST_MODEL: str = os.getenv("FAST_MODEL", "gpt-5-nano").strip("'\" ")
+    FAST_MODEL: str = os.getenv("FAST_MODEL", "gpt-5-nano-2025-08-07").strip("'\" ")
     OPENAI_BASE_URL: str | None = os.getenv("OPENAI_BASE_URL", None)
 
 
