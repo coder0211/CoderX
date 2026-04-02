@@ -84,11 +84,12 @@ Based on the mission, workspace state, and history above:
 Respond with JSON only. Field definitions:
 - `next_state`: MUST be one of exactly: "planning", "reading", "coding", "verifying", "arch_review", "product_review", "completed", "failed".
 - `action.type`: MUST be one of exactly: "shell", "mcp".
+- `confidence`: Integer from 0 to 100 representing how confident you are that this step progresses the goal.
 
 {{
   "reasoning": "Your analysis of current state. Mention architecture/UX concerns if any.",
   "next_state": "planning | reading | coding | verifying | arch_review | product_review | completed | failed",
-  "confidence": 0,
+  "confidence": 95,
   "decision_reason": "Why you chose this next_state",
   "action": {{
     "type": "shell | mcp",

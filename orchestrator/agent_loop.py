@@ -144,7 +144,7 @@ class AutonomousAgent:
                     state.final_state = WorkflowState.FAILED
                     await self._say(
                         f"⚠️ Đã đạt giới hạn {config.MAX_ITERATIONS} vòng lặp.",
-                        silent=False
+                        silent=True
                     )
                     break
 
@@ -187,7 +187,7 @@ class AutonomousAgent:
                     await self._say(
                         f"✅ *Xong rồi anh ơi!* (độ tự tin: {confidence}%)\n"
                         f"_{decision_reason}_",
-                        silent=False
+                        silent=True
                     )
                     break
 
@@ -196,7 +196,7 @@ class AutonomousAgent:
                     await self._say(
                         f"🚫 *Sorry anh, em bị kẹt rùi* — FAILED\n"
                         f"_{decision_reason}_",
-                        silent=False
+                        silent=True
                     )
                     break
 
@@ -213,7 +213,7 @@ class AutonomousAgent:
                     await self._say(
                         f"🔄 *[StuckDetector]* Cùng action lặp 3 lần liên tục: `{action.title}`. "
                         "Buộc thoát khẩn cấp.",
-                        silent=False
+                        silent=True
                     )
                     state.final_state = WorkflowState.FAILED
                     state.final_summary = (
@@ -292,7 +292,7 @@ class AutonomousAgent:
             f"\n{icon} *Báo cáo tổng kết của em:*\n{report}\n\n"
             f"📊 Mất {len(state.iterations)} bước | "
             f"Trạng thái: {state.final_state.value.upper()}",
-            silent=False
+            silent=True
         )
 
         return state

@@ -26,6 +26,24 @@ class OpenClawOrchestrator:
         self.current_plan: Optional[ExecutionPlan] = None
         self.step_results: List[dict] = []
         self._running: bool = False
+        self._current_subagent: Optional[AutonomousAgent] = None
+        self._started_at: float = time.time()
+
+    @property
+    def live(self) -> dict:
+        if self._current_subagent:
+            return self._current_subagent.live
+        
+        phase = "planning" if self._running else "idle"
+        return {
+            "phase": phase,
+            "iteration": len(self.step_results),
+            "max_iterations": self.current_plan.total_steps if self.current_plan else 0,
+            "current_action": "Planning and analyzing project map..." if phase == "planning" else "",
+            "last_thought": "",
+            "last_result": "",
+            "started_at": self._started_at,
+        }
 
     async def _say(self, msg: str, silent: bool = False):
         """Gửi thông báo tới Telegram / Logs."""
@@ -73,6 +91,7 @@ class OpenClawOrchestrator:
         Luồng chính: Lập kế hoạch -> Thực thi từng bước -> Báo cáo.
         """
         self._running = True
+        self._started_at = time.time()
         
         # OpenClaw Memory Bridge Init
         memory = MemoryManager(workspace)
@@ -111,7 +130,9 @@ class OpenClawOrchestrator:
                 
                 # Gọi AutonomousAgent thực thi một step
                 agent = AutonomousAgent(notify=self.notify)
+                self._current_subagent = agent
                 agent_state = await agent.run(step.prompt, workspace)
+                self._current_subagent = None
 
                 # Thu thập kết quả step (Artifact)
                 status = agent_state.final_state.value
