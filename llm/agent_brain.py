@@ -23,14 +23,14 @@ class ActionType(str, Enum):
 
 
 class WorkflowState(str, Enum):
-    PLANNING       = "planning"       # Lên kế hoạch, chia nhỏ nhiệm vụ
-    READING        = "reading"        # Đọc file/context — BẮT BUỘC trước CODING
-    CODING         = "coding"         # Viết code, tạo file, sửa lỗi
-    VERIFYING      = "verifying"      # Chạy test/lint — BẮT BUỘC trước COMPLETED
-    ARCH_REVIEW    = "arch_review"    # Pushback: đề xuất thay đổi kiến trúc
-    PRODUCT_REVIEW = "product_review" # Pushback: đề xuất thay đổi UX/UI
-    COMPLETED      = "completed"      # CHỈ vào được từ VERIFYING
-    FAILED         = "failed"         # Bó tay hoàn toàn
+    PLANNING       = "planning"       # Planning and task breakdown
+    READING        = "reading"        # Reading file/context — REQUIRED before CODING
+    CODING         = "coding"         # Writing code, creating files, fixing bugs
+    VERIFYING      = "verifying"      # Running test/lint — REQUIRED before COMPLETED
+    ARCH_REVIEW    = "arch_review"    # Pushback: proposing architectural changes
+    PRODUCT_REVIEW = "product_review" # Pushback: proposing UX/UI changes
+    COMPLETED      = "completed"      # Success (only reachable from VERIFYING)
+    FAILED         = "failed"         # Terminal failure
 
 
 # ─── State Machine Transition Table ──────────────────────────────────────────
@@ -77,8 +77,8 @@ def validate_transition(
     # Hard gate 1: COMPLETED chỉ đạt được sau khi đã VERIFYING ít nhất 1 lần
     if proposed == WorkflowState.COMPLETED and not has_verified:
         return WorkflowState.VERIFYING, (
-            "⚠️ [StateMachine] COMPLETED bị chặn — chưa VERIFYING. "
-            "Buộc chuyển → VERIFYING."
+            "⚠️ [StateMachine] COMPLETED blocked — not VERIFIED yet. "
+            "Forced transition → VERIFYING."
         )
 
     # Hard gate 2: Transition không hợp lệ theo bảng

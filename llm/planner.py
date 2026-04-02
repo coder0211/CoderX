@@ -145,10 +145,10 @@ class TaskPlanner:
         Review lại plan sau mỗi bước và điều chỉnh nếu cần.
         """
         user_content = (
-            f"Bản đồ Project hiện tại:\n{project_map}\n\n"
-            f"Kết quả bước vừa xong:\n{json.dumps(latest_result, indent=2)}\n\n"
-            f"Dựa trên tình hình hiện tại, hãy cập nhật các bước TIẾP THEO của plan. "
-            f"Chỉ trả về JSON các bước còn lại từ ID {latest_result['id'] + 1} trở đi."
+            f"Current Project Map:\n{project_map}\n\n"
+            f"Result of the last step:\n{json.dumps(latest_result, indent=2)}\n\n"
+            f"Based on the current situation, update the NEXT steps of the plan. "
+            f"Only return a JSON object containing the remaining steps from ID {latest_result['id'] + 1} onwards."
         )
 
         response = await self.client.chat.completions.create(
@@ -216,7 +216,7 @@ class TaskPlanner:
         user_content = (
             f"Task: {plan.task_summary}\n\n"
             f"Step results:\n{results_text}\n\n"
-            "Write a concise 3-5 line summary report."
+            "Write a concise 3-5 line summary report in Vietnamese."
         )
 
         response = await self.client.chat.completions.create(

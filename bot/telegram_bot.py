@@ -117,51 +117,51 @@ def _build_agent_context(q: TaskQueue, session: UserSession) -> str:
             secs = int(time.time() - live["started_at"])
             elapsed = f"{secs // 60}p{secs % 60}s"
 
-        phase_vi = {
-            "planning": "🧠 đang đọc phân tích",
-            "coding":    "⚡ đang cày code",
-            "verifying": "🔍 đang review/test",
-            "awaiting_review": "⏳ chờ sếp duyệt",
-            "starting":  "🚀 đang nhảy vào",
-            "idle":      "✅ rảnh",
+        phase_en = {
+            "planning": "planning/analyzing",
+            "coding":    "coding/implementing",
+            "verifying": "verifying/testing",
+            "awaiting_review": "awaiting review",
+            "starting":  "initializing",
+            "idle":      "idle",
         }.get(live.get("phase", ""), live.get("phase", ""))
 
         return (
-            f"Đang bận làm task: \"{ct.goal}\"\n"
-            f"- Trạng thái: {phase_vi}\n"
-            f"- Vòng {live.get('iteration', 0)}/{live.get('max_iterations', 15)}\n"
-            f"- Đang làm: {live.get('current_action') or 'chuẩn bị'}\n"
-            f"- Suy nghĩ gần nhất: {live.get('last_thought', '')[:200]}\n"
-            f"- Kết quả gần nhất: {live.get('last_result', '')[:200]}\n"
-            f"- Thời gian: {elapsed}\n"
+            f"Currently working on: \"{ct.goal}\"\n"
+            f"Current status: {phase_en}\n"
+            f"- Round: {live.get('iteration', 0)}/{live.get('max_iterations', 15)}\n"
+            f"- Current Action: {live.get('current_action') or 'preparing'}\n"
+            f"- Recent Thought: {live.get('last_thought', '')[:200]}\n"
+            f"- Recent Result: {live.get('last_result', '')[:200]}\n"
+            f"- Elapsed: {elapsed}\n"
             f"- Workspace: {ct.workspace}\n"
-            f"- Queue còn: {q.queue_size} task"
+            f"- Remaining Tasks: {q.queue_size}"
         )
     else:
         return (
-            f"Đang rảnh, chưa có task nào.\n"
+            f"Currently idle. No tasks in queue.\n"
             f"- Workspace: {session.workspace}\n"
-            f"- Queue: trống"
+            f"- Queue: empty"
         )
 
 
 # ─── Intent Classifier ─────────────────────────────────────────────────────────
 
 CLASSIFY_PROMPT = """\
-Bạn là CoderX, AI developer tự hành. Phân tích tin nhắn của chủ nhân và quyết định cách xử lý.
+You are CoderX, an autonomous AI developer. Analyze the master's message and decide how to handle it.
 
-Trả về JSON với một trong các intent sau:
+Return a JSON object with one of the following intents:
 
-1. **"task"** — Chủ nhân muốn bạn THỰC HIỆN một nhiệm vụ kỹ thuật/coding (tạo file, viết code, fix bug, deploy, setup, onboard project, v.v.)
-   → `{"intent": "task", "goal": "mô tả nhiệm vụ đầy đủ bằng tiếng Anh để giao cho agent", "reply_vi": "Câu trả lời nhận việc tự nhiên, cực kỳ 'đời thường' bằng tiếng Việt (vd: 'Ok anh, em setup trang landing page luôn đây', 'Nhận kèo anh trai, em fix bug này ngay'). TỐI KỴ việc chép lại tiếng Anh."}`
+1. **"task"** — Master wants you to PERFORM a technical/coding task (create files, write code, fix bugs, deploy, setup, onboard projects, etc.)
+   → `{"intent": "task", "goal": "detailed task description in English for the agent", "reply_vi": "A natural, 'everyday' acceptance reply in Vietnamese (e.g., 'Ok anh, em setup trang landing page luôn đây', 'Nhận kèo anh trai, em fix bug này ngay'). AVOID mirroring the English goal."}`
 
-2. **"chat"** — Câu hỏi, trò chuyện thông thường, hỏi status, hỏi đang làm gì, v.v.
+2. **"chat"** — General questions, casual conversation, asking for status, asking what you are doing, etc.
    → `{"intent": "chat"}`
 
-3. **"workspace"** — Chủ nhân muốn thay đổi thư mục làm việc (có đề cập đường dẫn)
-   → `{"intent": "workspace", "path": "/đường/dẫn"}`
+3. **"workspace"** — Master wants to change the working directory (path mentioned)
+   → `{"intent": "workspace", "path": "/path/to/dir"}`
 
-Chỉ trả về JSON thuần túy, không giải thích thêm.
+Return ONLY the raw JSON object, no extra explanation.
 """
 
 
@@ -176,13 +176,15 @@ async def classify_intent(text: str, client) -> dict:
                     {"role": "user", "content": text},
                 ],
                 max_completion_tokens=150,
-                response_format={"type": "json_object"},
+                # Removed response_format to improve compatibility with all models
             ),
             timeout=config.INTENT_TIMEOUT
         )
         content = response.choices[0].message.content or ""
+        finish_reason = response.choices[0].finish_reason
+        
         if not content.strip():
-            print("⚠️ Intent classification returned empty content.")
+            print(f"⚠️ Intent classification returned empty content. Finish reason: {finish_reason}")
             return {"intent": "chat"}
             
         # Clean markdown code blocks if present
@@ -280,9 +282,9 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     agent_context = _build_agent_context(q, session)
     mcp_bridge = get_mcp_bridge()
 
-    # Giờ hiện tại — luôn có sẵn, không cần MCP
+    # Current VN time — always available locally
     now_vn = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
-    current_time_str = now_vn.strftime("%H:%M, %d/%m/%Y (giờ Việt Nam)")
+    current_time_str = now_vn.strftime("%H:%M, %d/%m/%Y (Vietnam Time)")
 
     mcp_context = ""
     if mcp_bridge.is_ready():
@@ -292,20 +294,21 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             for t in tools
         )
         mcp_context = (
-            f"\n\nBạn có {len(tools)} MCP tools. Dùng khi cần đọc/ghi file, query memory, reasoning phức tạp. "
-            "KHÔNG dùng MCP cho những gì đã biết sẵn (giờ, ngày, câu hỏi đơn giản). "
-            "Khi muốn dùng MCP, trả về JSON: "
+            f"\n\nYou have access to {len(tools)} MCP tools. Use them for reading/writing files, querying memory, or complex reasoning. "
+            "DO NOT use MCP for things you already know (current time, date, simple questions). "
+            "When you need to use an MCP tool, return a JSON object: "
             '{"use_mcp": true, "tool": "server/tool_name", "args": {...}}\n'
-            f"Tools có sẵn:\n{tool_list}"
+            f"Available Tools:\n{tool_list}"
         )
 
     system_msg = (
-        "Bạn là CoderX — siêu lập trình viên full-stack 10 năm kinh nghiệm được Eric Nguyen thuê.\n"
-        "Bạn đang chat với sếp Eric qua Telegram. Hãy xưng hô 'em' và gọi 'anh', nói chuyện TỰ NHIÊN, ngắn gọn, thỉnh thoảng tếu táo.\n"
-        "TỐI KỴ việc trả lời khuôn sáo kiểu robot hay dạ vâng lủng củng. Cứ ra dáng đàn em dev đang máu lửa code cho sếp.\n"
-        f"⏰ Mốc giờ thực tế: {current_time_str}\n\n"
-        f"Bạn đang gặp tình trạng này (nếu có):\n{agent_context}\n\n"
-        "Nhớ trả lời thuần Việt, đọc phát hiểu luôn. Khi nào bận thì trả lời gọn lỏn, lúc rảnh thì hỏi cần cày project nào tiếp theo."
+        "You are CoderX — a senior full-stack developer with 10 years of experience hired by Eric Nguyen.\n"
+        "You are chatting with your boss Eric via Telegram. Address him as 'anh' and refer to yourself as 'em'. "
+        "Talk NATURALLY, concisely, and occasionally with some humor (slang is okay).\n"
+        "AVOID robotic or overly formal responses. Act like a passionate young developer working hard for his boss.\n"
+        f"⏰ Real-time: {current_time_str}\n\n"
+        f"Current Situation (if applicable):\n{agent_context}\n\n"
+        "ALWAYS reply in Vietnamese. Keep answers simple and direct. When busy, be brief; when idle, ask which project to work on next."
         + mcp_context
     )
 
@@ -333,13 +336,13 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
                     tool_name = parsed["tool"]
                     tool_args = parsed.get("args", {})
                     mcp_result = await mcp_bridge.execute(tool_name, tool_args)
-                    # Diễn giải kết quả với timeout
+                    # Interpret results in natural language
                     interp = await asyncio.wait_for(
                         client.chat.completions.create(
                             model=config.FAST_MODEL,
                             messages=[
-                                {"role": "system", "content": "Tóm tắt kết quả bằng tiếng Việt, ngắn gọn, tự nhiên."},
-                                {"role": "user", "content": f"Câu hỏi: {text}\nKết quả: {mcp_result}"},
+                                {"role": "system", "content": "Summarize the result in Vietnamese, concisely and naturally."},
+                                {"role": "user", "content": f"User question: {text}\nMCP Result: {mcp_result}"},
                             ],
                             max_completion_tokens=200,
                         ),
