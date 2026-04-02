@@ -51,7 +51,8 @@ async def main():
         "[bold cyan]🤖 CoderX[/bold cyan]\n"
         "[dim]Autonomous AI Developer Bot[/dim]\n\n"
         f"[green]✓[/green] Default workspace: [cyan]{config.DEFAULT_WORKSPACE}[/cyan]\n"
-        f"[green]✓[/green] OpenAI model: [cyan]{config.OPENAI_MODEL}[/cyan]\n"
+        f"[green]✓[/green] Smart model: [cyan]{config.SMART_MODEL}[/cyan]  [dim](planner · agent)[/dim]\n"
+        f"[green]✓[/green] Fast model:  [cyan]{config.FAST_MODEL}[/cyan]   [dim](summarize · report · chat)[/dim]\n"
         f"[green]✓[/green] OpenAI Key: [yellow]{mask_key(config.OPENAI_API_KEY)}[/yellow]\n"
         + _mcp_status_line(),
         title="CoderX Starting",

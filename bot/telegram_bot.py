@@ -169,13 +169,12 @@ async def classify_intent(text: str, client) -> dict:
     """Dùng LLM để phân loại ý định tin nhắn."""
     try:
         response = await client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.FAST_MODEL,
             messages=[
                 {"role": "system", "content": CLASSIFY_PROMPT},
                 {"role": "user", "content": text},
             ],
-            temperature=0.1,
-            max_tokens=150,
+            max_completion_tokens=150,
             response_format={"type": "json_object"},
         )
         return json.loads(response.choices[0].message.content)
@@ -292,10 +291,9 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     try:
         response = await client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.FAST_MODEL,
             messages=messages,
-            temperature=0.6,
-            max_tokens=400,
+            max_completion_tokens=400,
         )
         reply = response.choices[0].message.content.strip()
 
@@ -309,13 +307,12 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
                     mcp_result = await mcp_bridge.execute(tool_name, tool_args)
                     # Diễn giải kết quả
                     interp = await client.chat.completions.create(
-                        model=config.OPENAI_MODEL,
+                        model=config.FAST_MODEL,
                         messages=[
                             {"role": "system", "content": "Tóm tắt kết quả bằng tiếng Việt, ngắn gọn, tự nhiên."},
                             {"role": "user", "content": f"Câu hỏi: {text}\nKết quả: {mcp_result}"},
                         ],
-                        temperature=0.4,
-                        max_tokens=200,
+                        max_completion_tokens=200,
                     )
                     reply = interp.choices[0].message.content.strip()
             except (json.JSONDecodeError, Exception):

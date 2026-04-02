@@ -119,7 +119,6 @@ class TaskPlanner:
                 {"role": "system", "content": system_prompt},
                 *self.conversation_history,
             ],
-            temperature=0.3,
             response_format={"type": "json_object"},
         )
 
@@ -159,7 +158,6 @@ class TaskPlanner:
                 *self.conversation_history,
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.2,
             response_format={"type": "json_object"},
         )
 
@@ -227,7 +225,6 @@ class TaskPlanner:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.5,
         )
 
         return response.choices[0].message.content

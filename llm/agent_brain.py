@@ -284,7 +284,6 @@ class AgentBrain:
         response = await self.client.chat.completions.create(
             model=config.SMART_MODEL,
             messages=self._messages,
-            temperature=0.2,
             response_format={"type": "json_object"},
         )
 
@@ -358,6 +357,5 @@ class AgentBrain:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.4,
         )
         return response.choices[0].message.content
