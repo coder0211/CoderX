@@ -18,7 +18,10 @@ class Config:
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip("'\" ")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o").strip("'\" ")
+    # SMART_MODEL: dùng cho reasoning nặng — TaskPlanner, AgentBrain
+    SMART_MODEL: str = os.getenv("SMART_MODEL", "gpt-5-mini").strip("'\" ")
+    # FAST_MODEL: dùng cho tác vụ đơn giản — summarize, final report, telegram chat
+    FAST_MODEL: str = os.getenv("FAST_MODEL", "gpt-5-nano").strip("'\" ")
     OPENAI_BASE_URL: str | None = os.getenv("OPENAI_BASE_URL", None)
 
 
@@ -54,6 +57,10 @@ class Config:
             errors.append("TELEGRAM_BOT_TOKEN is required")
         if not cls.OPENAI_API_KEY:
             errors.append("OPENAI_API_KEY is required")
+        if not cls.SMART_MODEL:
+            errors.append("SMART_MODEL is required")
+        if not cls.FAST_MODEL:
+            errors.append("FAST_MODEL is required")
         if errors:
             raise EnvironmentError("Config errors:\n" + "\n".join(f"  - {e}" for e in errors))
 

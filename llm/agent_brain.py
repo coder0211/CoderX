@@ -282,7 +282,7 @@ class AgentBrain:
             })
 
         response = await self.client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.SMART_MODEL,
             messages=self._messages,
             temperature=0.2,
             response_format={"type": "json_object"},
@@ -353,7 +353,7 @@ class AgentBrain:
         )
 
         response = await self.client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.FAST_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},

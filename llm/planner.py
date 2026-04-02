@@ -114,7 +114,7 @@ class TaskPlanner:
         self.conversation_history.append({"role": "user", "content": user_content})
 
         response = await self.client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.SMART_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 *self.conversation_history,
@@ -153,7 +153,7 @@ class TaskPlanner:
         )
 
         response = await self.client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.SMART_MODEL,
             messages=[
                 {"role": "system", "content": review_system},
                 *self.conversation_history,
@@ -222,7 +222,7 @@ class TaskPlanner:
         )
 
         response = await self.client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+            model=config.FAST_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
